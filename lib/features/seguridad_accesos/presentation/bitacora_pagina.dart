@@ -35,19 +35,24 @@ class BitacoraPagina extends ConsumerStatefulWidget {
 }
 
 class _BitacoraPaginaState extends ConsumerState<BitacoraPagina> {
-  var _f = FiltroBitacora(desde: DateTime.now().subtract(const Duration(days: 30)));
+  // Últimos 30 días completos (desde las 00:00 de ese día).
+  var _f = FiltroBitacora(desde: DateUtils.dateOnly(DateTime.now()).subtract(const Duration(days: 30)));
 
   static const _acciones = {
     'insert': 'Alta', 'update': 'Cambio', 'delete': 'Baja', 'login': 'Inicio de sesión', 'login_fallido': 'Intento fallido',
     'bloqueo': 'Bloqueo de cuenta', 'acceso_denegado': 'Acceso denegado', 'cambio_clave': 'Cambio de contraseña',
     'restablecer_clave': 'Restablecer contraseña', 'cierre_sesiones': 'Cierre de sesiones', 'parametro': 'Parámetro',
-    'respaldo': 'Respaldo', 'respaldo_pedido': 'Respaldo pedido', 'restauracion': 'Restauración', 'desbloqueo': 'Desbloqueo',
+    'respaldo': 'Respaldo', 'respaldo_pedido': 'Respaldo pedido', 'respaldo_fallido': 'Respaldo fallido',
+    'restauracion': 'Restauración', 'desbloqueo': 'Desbloqueo', 'optimizacion': 'Mantenimiento de la base',
+    'github_vinculado': 'GitHub vinculado', 'github_desvinculado': 'GitHub desvinculado',
   };
   static const _tablas = {
     'usuarios': 'Usuarios', 'solicitudes_aprobacion': 'Solicitudes', 'pesajes': 'Pesajes', 'ordenes_ensilado': 'Órdenes',
     'lotes': 'Lotes', 'guias_transferencia': 'Guías', 'mermas': 'Mermas', 'compras': 'Compras', 'pagos': 'Pagos',
     'pedidos': 'Pedidos', 'notas_venta': 'Notas de venta', 'cobros': 'Cobros', 'despachos': 'Despachos', 'productos': 'Productos',
     'clientes': 'Clientes', 'proveedores': 'Proveedores', 'parametros': 'Parámetros', 'respaldos': 'Respaldos', 'reportes': 'Reportes',
+    'consumos_insumo': 'Consumo de insumos', 'revisiones_fermentacion': 'Revisiones de fermentación', 'granos': 'Parámetros por grano',
+    'sesiones': 'Sesiones', 'existencias': 'Existencias',
   };
 
   String _cambio(Fila e) {
@@ -67,12 +72,15 @@ class _BitacoraPaginaState extends ConsumerState<BitacoraPagina> {
     return '';
   }
 
+  /// «Desde» no puede quedar después de «Hasta» (ni al revés): cada selector se limita por la otra fecha.
   Future<void> _fecha(bool desde) async {
+    final hoy = DateTime.now();
+    final primera = DateTime(2026);
     final d = await showDatePicker(
         context: context,
-        firstDate: DateTime(2026),
-        lastDate: DateTime.now(),
-        initialDate: (desde ? _f.desde : _f.hasta) ?? DateTime.now());
+        firstDate: desde ? primera : (_f.desde ?? primera),
+        lastDate: desde ? (_f.hasta ?? hoy) : hoy,
+        initialDate: (desde ? _f.desde : _f.hasta) ?? hoy);
     if (d == null) return;
     setState(() => _f = FiltroBitacora(
         desde: desde ? d : _f.desde, hasta: desde ? _f.hasta : d, accion: _f.accion, tabla: _f.tabla, usuario: _f.usuario));
