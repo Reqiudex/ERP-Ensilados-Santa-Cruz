@@ -49,7 +49,7 @@ update public.usuarios set estado = 'suspendido' where id::text not like 'a10000
 update auth.users set banned_until = null,
        encrypted_password = extensions.crypt('Ensilados2026!', extensions.gen_salt('bf')),
        raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) - 'debe_cambiar_clave'
- where id::text like 'a1000000-0000-4000-8000-0000000000__';
+ where id::text like 'a1000000-0000-4000-8000-0000000000__' and id::text not like '%99';
 update auth.users set banned_until = 'infinity' where id::text not like 'a1000000-0000-4000-8000-0000000000__'
    and id in (select id from public.usuarios);
 delete from auth.sessions;
