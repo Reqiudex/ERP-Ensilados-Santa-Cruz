@@ -33,7 +33,7 @@ class _Marco extends StatelessWidget {
               ),
               padding: const EdgeInsets.all(56),
               child: const Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Image(image: AssetImage('assets/marca/logo_blanco.png'), height: 120),
+                Image(image: AssetImage('assets/marca/logo_blanco.png'), height: 96),
                 SizedBox(height: 24),
                 Text('Ensilados Santa Cruz', style: TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w800)),
                 SizedBox(height: 8),
@@ -52,7 +52,7 @@ class _Marco extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 if (!ancho) ...[
-                  const Image(image: AssetImage('assets/marca/logo_verde.png'), height: 88),
+                  const Image(image: AssetImage('assets/marca/logo_verde.png'), height: 70),
                   const SizedBox(height: 12),
                   const Text('Ensilados Santa Cruz',
                       style: TextStyle(color: Colores.primario, fontSize: 22, fontWeight: FontWeight.w800)),
