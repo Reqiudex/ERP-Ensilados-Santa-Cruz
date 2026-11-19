@@ -84,7 +84,12 @@ class Barras extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Row(children: [
-            SizedBox(width: 170, child: Text(e.key, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
+            // «Centro de Acopio» se omite en la etiqueta para que el nombre de la sede quepa en pantallas angostas.
+            SizedBox(
+                width: 170,
+                child: Tooltip(
+                    message: e.key,
+                    child: Text(e.key.replaceFirst('Centro de Acopio ', ''), overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
             Expanded(
               child: LayoutBuilder(
                 builder: (c, k) => Align(
@@ -375,7 +380,7 @@ class _ReporteMermasPaginaState extends ConsumerState<ReporteMermasPagina> {
     return Pagina(
       etiquetaRf: 'Reportes · RF-23',
       titulo: 'Pérdidas y merma',
-      subtitulo: 'Cada baja con su causa, quién la solicitó y quién la aprobó (ajuste de la revisión del Sprint 4).',
+      subtitulo: 'Cada baja con su causa, quién la solicitó y quién la aprobó.',
       hijos: [
         _BarraPeriodo(_p, (x) => setState(() => _p = x)),
         Asincrono(v, datos: (d) {

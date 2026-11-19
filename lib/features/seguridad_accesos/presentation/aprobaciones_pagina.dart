@@ -34,7 +34,7 @@ class _AprobacionesPaginaState extends ConsumerState<AprobacionesPagina> {
     return Pagina(
       etiquetaRf: 'Seguridad y Accesos · RF-02',
       titulo: 'Bandeja de aprobaciones',
-      subtitulo: 'Las más antiguas primero. Nadie aprueba lo que registró: la base de datos lo rechaza por restricción CHECK.',
+      subtitulo: 'Las más antiguas primero. Nadie aprueba lo que registró: la base de datos lo rechaza (separación de funciones).',
       acciones: [
         SegmentedButton<String>(
           segments: const [

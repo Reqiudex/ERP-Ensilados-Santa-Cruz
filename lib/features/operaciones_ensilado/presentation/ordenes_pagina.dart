@@ -85,7 +85,7 @@ class OrdenesPagina extends ConsumerWidget {
               columnas: [
                 Columna('Cierre', (o) => fecha(o['fecha_cierre'])),
                 if (!operador) Columna('Centro', (o) => '${o['sedes']?['nombre'] ?? ''}'),
-                Columna('Grano', (o) => '${o['granos']?['nombre']}'),
+                Columna('Grano', (o) => '${o['granos']?['nombre'] ?? '—'}'),
                 Columna('Lote', (o) => '${_lote(o)?['codigo'] ?? '—'}'),
                 Columna('Toneladas', (o) => toneladas(_kgAjustado(o) / 1000), numerica: true),
                 Columna('Rollos', (o) => '${o['rollos_obtenidos']}', numerica: true),

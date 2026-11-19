@@ -49,7 +49,7 @@ class _PedidosPaginaState extends ConsumerState<PedidosPagina> {
                   ],
                   columnas: [
                     Columna('Fecha', (p) => fechaHora(p['fecha_registro'])),
-                    Columna('Cliente', (p) => '${p['clientes']?['razon_social']}'),
+                    Columna('Cliente', (p) => '${p['clientes']?['razon_social'] ?? '—'}'),
                     Columna('Unidad', (p) => etiqueta(p['unidad_venta'])),
                     Columna('Lotes (PEPS)', (p) => ((p['pedido_detalle'] as List?) ?? const [])
                         .map((d) => '${d['lotes']?['codigo']} (${d['rollos_equivalentes']} r)')
