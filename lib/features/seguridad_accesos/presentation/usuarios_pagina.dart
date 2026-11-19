@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/formato.dart';
@@ -8,6 +9,7 @@ import '../../../core/widgets/componentes.dart';
 import '../data/repositorio_seguridad_supabase.dart';
 import '../domain/reglas_seguridad.dart';
 import '../domain/roles_y_permisos.dart';
+import '../domain/servicio_seguridad.dart';
 import 'medidor_clave.dart';
 import 'sesion.dart';
 
@@ -88,6 +90,13 @@ class _UsuariosPaginaState extends ConsumerState<UsuariosPagina> {
                 Columna('Rol', (u) => '${u['roles']?['nombre'] ?? ''}'),
                 Columna('Sede', (u) => '${u['sedes']?['nombre'] ?? ''}'),
                 Columna('Estado', (u) => etiqueta(u['estado']), celda: (u) => Estado(u['estado'])),
+                if (puede)
+                  Columna('Acceso', (u) => u['estado'] == 'activo' ? 'Habilitado' : 'Bloqueado',
+                      celda: (u) => _InterruptorAcceso(
+                            usuario: u,
+                            propio: u['id'] == perfil.id,
+                            alCambiar: (activar) => _cambiarAcceso(context, u, activar),
+                          )),
               ],
               acciones: puede ? (u) => _acciones(context, u, perfil.id, sedes) : null,
             ),
@@ -98,31 +107,10 @@ class _UsuariosPaginaState extends ConsumerState<UsuariosPagina> {
   }
 
   List<Widget> _acciones(BuildContext context, Fila u, String miId, List<Fila> sedes) {
-    final repo = ref.read(repositorioSeguridadProvider);
     final propio = u['id'] == miId;
-    Future<void> hacer(Future<void> Function() f, String ok) async {
-      await ejecutar(context, f, exito: ok);
-      ref.invalidate(usuariosProvider);
-    }
 
     return [
       IconButton(tooltip: 'Editar', icon: const Icon(Icons.edit_outlined), onPressed: () => _formulario(context, u, sedes)),
-      if (!propio && u['estado'] == 'activo')
-        IconButton(
-          tooltip: 'Suspender (baja lógica)',
-          icon: const Icon(Icons.pause_circle_outline, color: Colores.alerta),
-          onPressed: () async {
-            if (await confirmar(context, 'Suspender cuenta', 'La cuenta de ${u['nombre_completo']} quedará suspendida y se cerrarán sus sesiones. No se borra.')) {
-              await hacer(() => repo.cambiarEstadoUsuario(u['id'], 'suspender'), 'Cuenta suspendida.');
-            }
-          },
-        ),
-      if (!propio && u['estado'] != 'activo')
-        IconButton(
-          tooltip: u['estado'] == 'bloqueado' ? 'Desbloquear' : 'Activar',
-          icon: const Icon(Icons.lock_open_outlined, color: Colores.exito),
-          onPressed: () => hacer(() => repo.cambiarEstadoUsuario(u['id'], u['estado'] == 'bloqueado' ? 'desbloquear' : 'activar'), 'Cuenta activada.'),
-        ),
       if (!propio)
         IconButton(
           tooltip: 'Restablecer contraseña',
@@ -130,6 +118,21 @@ class _UsuariosPaginaState extends ConsumerState<UsuariosPagina> {
           onPressed: () => _restablecer(context, u),
         ),
     ];
+  }
+
+  /// Bloqueo preventivo: deshabilita o habilita el acceso al instante sin borrar historial (baja lógica).
+  Future<void> _cambiarAcceso(BuildContext context, Fila u, bool activar) async {
+    final repo = ref.read(repositorioSeguridadProvider);
+    if (!activar &&
+        !await confirmar(context, 'Bloquear acceso',
+            'La cuenta de ${u['nombre_completo']} quedará sin acceso y se cerrarán sus sesiones al instante. No se borra su historial.',
+            si: 'Bloquear')) {
+      return;
+    }
+    if (!context.mounted) return;
+    final accion = activar ? (u['estado'] == 'bloqueado' ? 'desbloquear' : 'activar') : 'suspender';
+    await ejecutar(context, () => repo.cambiarEstadoUsuario(u['id'], accion), exito: activar ? 'Acceso habilitado.' : 'Acceso bloqueado.');
+    ref.invalidate(usuariosProvider);
   }
 
   Future<void> _restablecer(BuildContext context, Fila u) async {
@@ -182,11 +185,30 @@ class _UsuariosPaginaState extends ConsumerState<UsuariosPagina> {
       contenido: (c, set) => Form(
         key: form,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextFormField(controller: nombre, decoration: const InputDecoration(labelText: 'Nombre completo'), validator: (v) => validarNombre(v ?? '')),
+          TextFormField(
+            controller: nombre,
+            decoration: const InputDecoration(labelText: 'Nombre completo', helperText: 'Solo letras y espacios; se guarda en mayúsculas.'),
+            textCapitalization: TextCapitalization.characters,
+            inputFormatters: [_formatoNombre],
+            validator: (v) => validarNombre(v ?? ''),
+          ),
           const SizedBox(height: 12),
-          TextFormField(controller: ci, decoration: const InputDecoration(labelText: 'CI'), keyboardType: TextInputType.number, validator: (v) => validarCi(v ?? '')),
+          TextFormField(
+            controller: ci,
+            decoration: const InputDecoration(labelText: 'CI', helperText: 'Solo dígitos.'),
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(15)],
+            validator: (v) => validarCi(v ?? ''),
+          ),
           const SizedBox(height: 12),
-          TextFormField(controller: correo, decoration: const InputDecoration(labelText: 'Correo'), keyboardType: TextInputType.emailAddress, validator: (v) => validarCorreo(v ?? '')),
+          TextFormField(
+            controller: correo,
+            decoration: const InputDecoration(labelText: 'Correo'),
+            keyboardType: TextInputType.emailAddress,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
+            inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'\s'))],
+            validator: (v) => validarCorreo(v ?? ''),
+          ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             initialValue: rol,
@@ -219,11 +241,28 @@ class _UsuariosPaginaState extends ConsumerState<UsuariosPagina> {
                 tipo: 'alerta'),
         ]),
       ),
-      alGuardar: () => ejecutar(context, () {
+      alGuardar: () async {
         final repo = ref.read(repositorioSeguridadProvider);
-        final d = {'nombre': nombre.text, 'ci': ci.text, 'correo': correo.text, 'rol': rol, 'sede_id': sede, 'clave': clave.text};
-        return u == null ? repo.crearUsuario(d) : repo.editarUsuario(u['id'], d);
-      }),
+        final seg = ServicioSeguridad();
+        final d = {
+          'nombre': ServicioSeguridad.normalizarNombre(seg.sanitizar(nombre.text, maximo: 120)),
+          'ci': ServicioSeguridad.normalizarCi(ci.text),
+          'correo': seg.sanitizar(correo.text, maximo: 160).toLowerCase(),
+          'rol': rol,
+          'sede_id': sede,
+          'clave': clave.text,
+        };
+        // Detección de duplicados antes de guardar: se bloquea el guardado e indica el campo repetido.
+        final dup = await ejecutar(context,
+            () => repo.duplicadosUsuario('${d['nombre']}', '${d['ci']}', '${d['correo']}', excluir: u?['id'] as String?));
+        if (dup == null) return null;
+        if (dup.isNotEmpty) {
+          if (context.mounted) await _avisarDuplicados(context, dup);
+          return null;
+        }
+        if (!context.mounted) return null;
+        return ejecutar(context, () => u == null ? repo.crearUsuario(d) : repo.editarUsuario(u['id'], d));
+      },
     );
     if (r != null && context.mounted) {
       avisar(context, r['pendiente_aprobacion'] == true ? 'Guardado. El rol privilegiado quedó pendiente de aprobación del gerente.' : 'Cuenta guardada.');
@@ -258,3 +297,45 @@ class _Filtro extends StatelessWidget {
 /// Filtro desplegable reutilizable por otras pantallas.
 Widget filtroDesplegable(String etiqueta, String? valor, Map<String, String> opciones, ValueChanged<String?> alCambiar) =>
     _Filtro(etiqueta, valor, opciones, alCambiar);
+
+final _formatoNombre = TextInputFormatter.withFunction((anterior, nuevo) {
+  final t = ServicioSeguridad.normalizarNombre(nuevo.text);
+  return TextEditingValue(text: t, selection: TextSelection.collapsed(offset: t.length));
+});
+
+Future<void> _avisarDuplicados(BuildContext context, List<String> campos) {
+  const nombres = {'nombre': 'Nombre completo', 'ci': 'Documento de identidad (CI)', 'correo': 'Correo electrónico'};
+  final tema = Theme.of(context);
+  return showDialog<void>(
+    context: context,
+    builder: (c) => AlertDialog(
+      icon: Icon(Icons.error_outline, color: tema.colorScheme.error),
+      title: const Text('Datos duplicados'),
+      content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('No se guardó la cuenta porque ya existe otra con el mismo:'),
+        const SizedBox(height: 10),
+        for (final f in campos)
+          ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.block, color: tema.colorScheme.error),
+            title: Text(nombres[f] ?? f, style: const TextStyle(fontWeight: FontWeight.w600)),
+          ),
+      ]),
+      actions: [FilledButton(onPressed: () => Navigator.pop(c), child: const Text('Entendido'))],
+    ),
+  );
+}
+
+/// Interruptor de acceso (bloqueo preventivo): activo = puede ingresar.
+class _InterruptorAcceso extends StatelessWidget {
+  const _InterruptorAcceso({required this.usuario, required this.propio, required this.alCambiar});
+  final Fila usuario;
+  final bool propio;
+  final ValueChanged<bool> alCambiar;
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: propio ? 'No puede bloquear su propia cuenta' : (usuario['estado'] == 'activo' ? 'Bloquear acceso' : 'Habilitar acceso'),
+        child: Switch(value: usuario['estado'] == 'activo', onChanged: propio ? null : alCambiar),
+      );
+}

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:excel/excel.dart' as xl;
 import 'package:file_saver/file_saver.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -18,12 +19,29 @@ class Exportador {
       {String? subtitulo, List<String> resumen = const []}) async {
     final doc = pw.Document(title: titulo, author: 'ERP Ensilados Santa Cruz');
     final verde = PdfColor.fromHex('#1B4D3E');
+    pw.MemoryImage? logo;
+    try {
+      logo = pw.MemoryImage((await rootBundle.load('assets/marca/logo_verde.png')).buffer.asUint8List());
+    } catch (_) {
+      logo = null;
+    }
+    final emision = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
     doc.addPage(pw.MultiPage(
       pageFormat: columnas.length > 6 ? PdfPageFormat.a4.landscape : PdfPageFormat.a4,
       margin: const pw.EdgeInsets.all(28),
       header: (c) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-        pw.Text('Ensilados Santa Cruz · ERP Agroindustrial', style: pw.TextStyle(fontSize: 9, color: verde)),
-        pw.SizedBox(height: 4),
+        pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [
+          if (logo != null) pw.Image(logo, height: 34),
+          if (logo != null) pw.SizedBox(width: 10),
+          pw.Expanded(
+            child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+              pw.Text('Ensilados Santa Cruz', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: verde)),
+              pw.Text('Sistema Integral de Gestión Agroindustrial (ERP)', style: pw.TextStyle(fontSize: 8, color: verde)),
+            ]),
+          ),
+          pw.Text('Fecha de emisión: $emision', style: const pw.TextStyle(fontSize: 8)),
+        ]),
+        pw.Divider(color: verde, thickness: 0.8),
         pw.Text(titulo, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
         if (subtitulo != null) pw.Text(subtitulo, style: const pw.TextStyle(fontSize: 9)),
         pw.SizedBox(height: 8),

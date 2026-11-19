@@ -8,6 +8,7 @@ import '../../../core/tema/tema.dart';
 import '../../../core/widgets/componentes.dart';
 import '../data/repositorio_seguridad_supabase.dart';
 import '../domain/roles_y_permisos.dart';
+import 'confirmar_clave.dart';
 import 'politicas_pagina.dart';
 import 'sesion.dart';
 
@@ -27,12 +28,22 @@ class MantenimientoPagina extends ConsumerWidget {
     return Pagina(
       etiquetaRf: 'Seguridad y Accesos · RF-06',
       titulo: 'Mantenimiento de la base de datos',
-      subtitulo: 'Respaldo diario con GitHub Actions (pg_dump). La restauración solo se ejecuta tras la aprobación del gerente.',
+      subtitulo: 'Respaldos con GitHub Actions (pg_dump) según la programación. La restauración solo se ejecuta tras la aprobación del gerente.',
       acciones: [
+        if (admin)
+          OutlinedButton.icon(
+            icon: const Icon(Icons.auto_fix_high_outlined),
+            label: const Text('Optimizar base de datos'),
+            onPressed: () async {
+              final n = await ejecutar(context, repo.optimizarBase);
+              if (n != null && context.mounted) avisar(context, 'Estadísticas e índices actualizados en $n tablas (ANALYZE).');
+              ref.invalidate(respaldosProvider);
+            },
+          ),
         if (admin)
           FilledButton.icon(
             icon: const Icon(Icons.backup_outlined),
-            label: const Text('Pedir respaldo manual'),
+            label: const Text('Respaldo manual ahora'),
             onPressed: () async {
               await ejecutar(context, () async {
                 await repo.pedirRespaldo();
@@ -67,6 +78,7 @@ class MantenimientoPagina extends ConsumerWidget {
             color: Colores.ambarOscuro,
           ),
         ]),
+        if (admin) const _ProgramacionRespaldos(),
         Asincrono(resp,
             datos: (l) => TablaDatos(
                   titulo: 'Historial de respaldos',
@@ -213,5 +225,113 @@ class _ParametrosGenerales extends ConsumerWidget {
                 ],
               ),
             ));
+  }
+}
+
+
+/// Estrategia y programación automática de respaldos (la lee el flujo «Respaldo de la base de datos»).
+class _ProgramacionRespaldos extends ConsumerStatefulWidget {
+  const _ProgramacionRespaldos();
+  @override
+  ConsumerState<_ProgramacionRespaldos> createState() => _ProgramacionRespaldosState();
+}
+
+class _ProgramacionRespaldosState extends ConsumerState<_ProgramacionRespaldos> {
+  Map<String, dynamic>? _v;
+  static const _claves = ['respaldo_activo', 'respaldo_frecuencia', 'respaldo_hora_utc', 'respaldo_retencion_dias', 'respaldo_estrategia'];
+
+  /// Bolivia está en UTC−4 todo el año.
+  static int _horaLocal(String utc) => ((int.tryParse(utc.split(':').first) ?? 7) - 4 + 24) % 24;
+  static String _horaUtc(int local) => '${((local + 4) % 24).toString().padLeft(2, '0')}:00';
+
+  Future<void> _guardar() async {
+    final ok = await confirmarConClave(context, ref,
+        titulo: 'Confirmar programación de respaldos', detalle: 'Ingrese su contraseña de administrador para guardar la programación.');
+    if (!ok || !mounted) return;
+    await ejecutar(context, () async {
+      await ref.read(repositorioSeguridadProvider).guardarParametros({for (final k in _claves) k: _v![k]});
+      return true;
+    }, exito: 'Programación guardada y registrada en la bitácora.');
+    ref.invalidate(parametrosProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = ref.watch(parametrosProvider);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Asincrono(p, datos: (todo) {
+        _v ??= {for (final k in _claves) k: (todo[k] as Map?)?['valor']};
+        final activo = _v!['respaldo_activo'] == true;
+        return Seccion(
+          titulo: 'Estrategia y programación de respaldos',
+          icono: Icons.schedule_outlined,
+          hijo: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Estrategia'),
+            const SizedBox(height: 8),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'completo', label: Text('Completo (Full)'), icon: Icon(Icons.storage)),
+                ButtonSegment(value: 'incremental', label: Text('Incremental'), enabled: false),
+                ButtonSegment(value: 'diferencial', label: Text('Diferencial'), enabled: false),
+              ],
+              selected: {'${_v!['respaldo_estrategia'] ?? 'completo'}'},
+              onSelectionChanged: (x) => setState(() => _v!['respaldo_estrategia'] = x.first),
+            ),
+            const SizedBox(height: 6),
+            Text('Incremental y diferencial no están disponibles: Supabase (plan gratuito) no da acceso a los registros WAL; '
+                'cada respaldo es un volcado completo con pg_dump.',
+                style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 12),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Respaldo automático en segundo plano'),
+              value: activo,
+              onChanged: (b) => setState(() => _v!['respaldo_activo'] = b),
+            ),
+            Wrap(spacing: 16, runSpacing: 16, children: [
+              SizedBox(
+                width: 220,
+                child: DropdownButtonFormField<String>(
+                  initialValue: '${_v!['respaldo_frecuencia'] ?? 'diaria'}',
+                  decoration: const InputDecoration(labelText: 'Frecuencia'),
+                  items: const [
+                    DropdownMenuItem(value: 'diaria', child: Text('Diario')),
+                    DropdownMenuItem(value: 'semanal', child: Text('Semanal (lunes)')),
+                    DropdownMenuItem(value: 'mensual', child: Text('Mensual (día 1)')),
+                  ],
+                  onChanged: activo ? (x) => setState(() => _v!['respaldo_frecuencia'] = x) : null,
+                ),
+              ),
+              SizedBox(
+                width: 220,
+                child: DropdownButtonFormField<int>(
+                  initialValue: _horaLocal('${_v!['respaldo_hora_utc'] ?? '07:00'}'),
+                  decoration: const InputDecoration(labelText: 'Hora de ejecución (Bolivia)'),
+                  items: [for (var h = 0; h < 24; h++) DropdownMenuItem(value: h, child: Text('${h.toString().padLeft(2, '0')}:00'))],
+                  onChanged: activo ? (x) => setState(() => _v!['respaldo_hora_utc'] = _horaUtc(x ?? 3)) : null,
+                ),
+              ),
+            ]),
+            const SizedBox(height: 16),
+            const Text('Retención'),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, children: [
+              for (final d in const [7, 15, 30])
+                ChoiceChip(
+                  label: Text('Últimos $d días'),
+                  selected: (_v!['respaldo_retencion_dias'] as num?)?.toInt() == d,
+                  onSelected: (_) => setState(() => _v!['respaldo_retencion_dias'] = d),
+                ),
+            ]),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(icon: const Icon(Icons.save_outlined), label: const Text('Guardar programación'), onPressed: _guardar),
+            ),
+          ]),
+        );
+      }),
+    );
   }
 }

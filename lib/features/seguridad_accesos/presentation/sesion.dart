@@ -50,8 +50,13 @@ class SesionControlador extends AsyncNotifier<EstadoSesion> {
   }
 
   Future<void> cerrarSesion({String? mensaje}) async {
-    await ref.read(repositorioSeguridadProvider).cerrarSesion();
-    state = AsyncData(EstadoSesion(mensaje: mensaje));
+    try {
+      await ref.read(repositorioSeguridadProvider).cerrarSesion();
+    } catch (_) {
+      // La sesión pudo haber sido revocada en el servidor: igual se sale localmente.
+    } finally {
+      state = AsyncData(EstadoSesion(mensaje: mensaje));
+    }
   }
 
   Future<void> cambiarClave(String actual, String nueva) async {
