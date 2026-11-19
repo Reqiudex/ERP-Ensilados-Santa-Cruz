@@ -26,10 +26,15 @@ jobs:
       - run: flutter pub get
       - run: flutter build apk --release
       - run: cp build/app/outputs/flutter-apk/app-release.apk erp-ensilados-santa-cruz.apk
+      - name: Quitar la Release anterior para que la etiqueta apunte a este commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete apk-ultima --cleanup-tag -y -R ${{ github.repository }} || true
       - name: Publicar en la Release «apk-ultima»
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-ultima
+          target_commitish: ${{ github.sha }}
           name: APK Android (última versión)
           body: |
             APK de la app de los centros de acopio (Android 8 o superior). Instale el archivo directamente en el teléfono
