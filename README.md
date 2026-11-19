@@ -67,7 +67,7 @@ Los informes quedan en `build/informes/`.
 |---|---|
 | `pages.yml` | Compila y publica el portal web en GitHub Pages |
 | `apk.yml` | Compila el APK y lo publica en la Release «apk-ultima» |
-| `pruebas.yml` / `auditoria.yml` | Ejecutan las pruebas y la auditoría |
+| `pruebas.yml` / `auditoria.yml` | Ejecutan las pruebas y la auditoría (a mano; luego conviene reiniciar la demo) |
 | `respaldo.yml` | Respaldo diario de la base con `pg_dump` |
 | `restauracion.yml` | Restaura un respaldo aprobado por el gerente |
 | `reiniciar-demo.yml` | Recarga los datos de demostración |

@@ -1,9 +1,8 @@
 name: Auditoría de controles
 
+# Se ejecuta a mano: las pruebas crean registros en la base en línea y la demo debe quedar limpia.
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 12 * * 1'
 
 jobs:
   auditoria:
