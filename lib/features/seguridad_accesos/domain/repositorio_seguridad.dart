@@ -53,6 +53,15 @@ abstract interface class RepositorioSeguridad {
   Future<void> solicitarRestauracion(String respaldo, String motivo);
   Future<int> optimizarBase();
 
+  /// Datos completos en JSON para guardarlos en la PC del administrador.
+  Future<Map<String, dynamic>> exportarRespaldo();
+  Future<Map<String, dynamic>> estadoGithub();
+  Future<void> vincularGithub({required String repositorio, required String cuenta, required String token, String rama});
+  Future<void> desvincularGithub();
+  /// Envía una copia al repositorio de GitHub vinculado y devuelve el resultado (archivo, tamaño, SHA-256).
+  Future<Map<String, dynamic>> enviarRespaldoGithub();
+  Future<Map<String, dynamic>> estadoMantenimiento();
+
   // RF-05 Bitácora
   Future<List<Registro>> bitacora({DateTime? desde, DateTime? hasta, String? accion, String? tabla, String? usuarioId});
 

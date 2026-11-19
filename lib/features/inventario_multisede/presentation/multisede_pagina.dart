@@ -35,7 +35,7 @@ class MultisedePagina extends ConsumerWidget {
     final v = ref.watch(stockEnVivoProvider);
     return Pagina(
       etiquetaRf: 'Inventario y Logística · RF-12',
-      titulo: 'Inventario por sede en tiempo real',
+      titulo: 'Inventario por sede',
       subtitulo: 'Rollos disponibles, reservados y en tránsito por centro de acopio. Se actualiza solo cuando otra sede registra un movimiento.',
       hijos: [
         Asincrono(v, alReintentar: () => ref.invalidate(stockEnVivoProvider), datos: (foto) {

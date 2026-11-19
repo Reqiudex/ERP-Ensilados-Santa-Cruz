@@ -11,6 +11,7 @@ import '../../../core/widgets/componentes.dart';
 import '../data/repositorio_seguridad_supabase.dart';
 import '../domain/roles_y_permisos.dart';
 import 'confirmar_clave.dart';
+import 'politicas_pagina.dart';
 import 'sesion.dart';
 
 final sesionesProvider = FutureProvider.autoDispose<List<Fila>>((ref) => ref.watch(repositorioSeguridadProvider).sesionesActivas());
@@ -134,14 +135,15 @@ class _SesionesPaginaState extends ConsumerState<SesionesPagina> {
     final puede = Accion.cerrarSesiones.permitida(perfil?.rol);
     return Pagina(
       etiquetaRf: 'Seguridad y Accesos · RF-04',
-      titulo: 'Sesiones activas',
-      subtitulo: 'Monitoreo en tiempo real de las sesiones del portal y de la app. Cierre por inactividad: '
-          '${perfil?.minutosInactividad ?? 15} minutos. PIN sin conexión: solo Android.',
+      titulo: 'Autenticación y sesiones',
+      subtitulo: 'Validación de credenciales, cierre por inactividad, PIN sin conexión (Android) y monitoreo de las sesiones '
+          'abiertas, con cierre inmediato.',
       acciones: [
         if (puede) FilledButton.icon(icon: const Icon(Icons.logout), label: const Text('Cerrar todas las demás'), onPressed: _cerrarTodas),
       ],
       alRefrescar: () async => ref.invalidate(sesionesProvider),
       hijos: [
+        if (puede) const _PoliticaSesiones(),
         Asincrono(v, datos: (l) {
           if (l.isEmpty) return const MensajeVacio(titulo: 'No hay sesiones activas.');
           final tipos = <String, int>{};
@@ -239,5 +241,88 @@ class _TarjetaSesion extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+/// Política de sesiones (RF-04): inactividad, sesiones simultáneas y PIN sin conexión de Android.
+class _PoliticaSesiones extends ConsumerStatefulWidget {
+  const _PoliticaSesiones();
+  @override
+  ConsumerState<_PoliticaSesiones> createState() => _PoliticaSesionesState();
+}
+
+class _PoliticaSesionesState extends ConsumerState<_PoliticaSesiones> {
+  Map<String, dynamic>? _v;
+  static const _claves = ['inactividad_minutos', 'sesiones_max', 'pin_min', 'pin_max', 'pin_intentos', 'horas_sin_sincronizar'];
+
+  int _n(String k, int d) => (_v?[k] as num?)?.toInt() ?? d;
+
+  Future<void> _guardar() async {
+    final ok = await confirmarConClave(context, ref,
+        titulo: 'Confirmar política de sesiones', detalle: 'Ingrese su contraseña de administrador para aplicar los cambios.');
+    if (!ok || !mounted) return;
+    await ejecutar(context, () async {
+      await ref.read(repositorioSeguridadProvider).guardarParametros({for (final k in _claves) k: _v![k]});
+      return true;
+    }, exito: 'Política de sesiones guardada y registrada en la bitácora.');
+    ref.invalidate(parametrosProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = ref.watch(parametrosProvider);
+    return Asincrono(p, datos: (todo) {
+      _v ??= {for (final k in _claves) k: (todo[k] as Map?)?['valor']};
+      Widget campo(Widget w) => SizedBox(width: esAncho(context) ? 260 : double.infinity, child: w);
+      return Seccion(
+        titulo: 'Política de sesiones y PIN sin conexión',
+        icono: Icons.timer_outlined,
+        hijo: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Wrap(spacing: 16, runSpacing: 16, children: [
+            campo(DesplegableNumero(
+              etiqueta: 'Cierre por inactividad',
+              valor: _n('inactividad_minutos', 15),
+              opciones: const {5: '5 minutos', 10: '10 minutos', 15: '15 minutos', 30: '30 minutos'},
+              alCambiar: (x) => setState(() => _v!['inactividad_minutos'] = x),
+            )),
+            campo(DesplegableNumero(
+              etiqueta: 'Sesiones simultáneas por usuario',
+              valor: _n('sesiones_max', 0),
+              opciones: const {1: '1 dispositivo', 2: '2 dispositivos', 3: '3 dispositivos', 0: 'Ilimitado'},
+              alCambiar: (x) => setState(() => _v!['sesiones_max'] = x),
+            )),
+            campo(DesplegableNumero(
+              etiqueta: 'PIN: dígitos mínimos',
+              valor: _n('pin_min', 4),
+              opciones: const {4: '4 dígitos', 5: '5 dígitos', 6: '6 dígitos'},
+              alCambiar: (x) => setState(() => _v!['pin_min'] = x),
+            )),
+            campo(DesplegableNumero(
+              etiqueta: 'PIN: dígitos máximos',
+              valor: _n('pin_max', 6),
+              opciones: const {4: '4 dígitos', 5: '5 dígitos', 6: '6 dígitos'},
+              alCambiar: (x) => setState(() => _v!['pin_max'] = x),
+            )),
+            campo(DesplegableNumero(
+              etiqueta: 'PIN: intentos antes de exigir ingreso en línea',
+              valor: _n('pin_intentos', 3),
+              opciones: const {3: '3 intentos', 5: '5 intentos'},
+              alCambiar: (x) => setState(() => _v!['pin_intentos'] = x),
+            )),
+            campo(DesplegableNumero(
+              etiqueta: 'Horas máximas sin sincronizar (PIN)',
+              valor: _n('horas_sin_sincronizar', 12),
+              opciones: const {4: '4 horas', 8: '8 horas', 12: '12 horas', 24: '24 horas'},
+              alCambiar: (x) => setState(() => _v!['horas_sin_sincronizar'] = x),
+            )),
+          ]),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(icon: const Icon(Icons.save_outlined), label: const Text('Guardar política'), onPressed: _guardar),
+          ),
+        ]),
+      );
+    });
   }
 }

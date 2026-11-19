@@ -33,7 +33,7 @@ class _StockLotesPaginaState extends ConsumerState<StockLotesPagina> {
     final sede = operador ? perfil.sedeId : null;
     return Pagina(
       etiquetaRf: 'Inventario y Logística · RF-11',
-      titulo: 'Stock por lotes y trazabilidad',
+      titulo: 'Stock por lote y trazabilidad',
       subtitulo: 'El stock no se edita a mano: cambia solo por movimientos con documento de origen. Toque un lote para ver su recorrido.',
       acciones: [
         FilterChip(label: const Text('Solo con stock'), selected: _conStock, onSelected: (b) => setState(() => _conStock = b)),

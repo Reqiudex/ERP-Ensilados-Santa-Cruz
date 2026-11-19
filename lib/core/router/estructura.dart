@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/operaciones_ensilado/data/cola_sincronizacion.dart';
 import '../../features/seguridad_accesos/data/repositorio_seguridad_supabase.dart';
@@ -30,14 +32,18 @@ class _EstructuraState extends ConsumerState<Estructura> {
   DateTime _ultimaActividad = DateTime.now();
   Timer? _reloj;
   Timer? _vigilancia;
+  RealtimeChannel? _canalSesion;
   bool _revisando = false;
+  bool _expulsando = false;
 
   @override
   void initState() {
     super.initState();
     _reloj = Timer.periodic(const Duration(seconds: 20), (_) => _revisarInactividad());
-    // Sesión revocada por el administrador («matar sesión»): se expulsa al ingreso en segundos.
-    _vigilancia = Timer.periodic(const Duration(seconds: 8), (_) => _revisarRevocacion());
+    // Sesión revocada por el administrador («matar sesión»): la base avisa por Realtime en el canal de la sesión y
+    // el dispositivo sale al instante. La revisión periódica queda como respaldo si el canal se corta.
+    _escucharRevocacion();
+    _vigilancia = Timer.periodic(const Duration(seconds: 5), (_) => _revisarRevocacion());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final p = ref.read(perfilProvider);
       if (p?.rol == Rol.operadorCentro) {
@@ -51,7 +57,41 @@ class _EstructuraState extends ConsumerState<Estructura> {
   void dispose() {
     _reloj?.cancel();
     _vigilancia?.cancel();
+    final canal = _canalSesion;
+    if (canal != null) Supabase.instance.client.removeChannel(canal);
     super.dispose();
+  }
+
+  /// Identificador de la sesión actual (claim session_id del token de acceso).
+  static String? _idSesion() {
+    final token = Supabase.instance.client.auth.currentSession?.accessToken;
+    if (token == null) return null;
+    try {
+      final partes = token.split('.');
+      final carga = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(partes[1])))) as Map<String, dynamic>;
+      return carga['session_id'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _escucharRevocacion() {
+    final id = _idSesion();
+    if (id == null) return;
+    _canalSesion = Supabase.instance.client
+        .channel('sesion:$id')
+        .onBroadcast(event: 'revocada', callback: (_) => _expulsar())
+        .subscribe();
+  }
+
+  Future<void> _expulsar() async {
+    if (_expulsando || !mounted || ref.read(sesionProvider.notifier).saliendo || ref.read(perfilProvider) == null) return;
+    _expulsando = true;
+    try {
+      await ref.read(sesionProvider.notifier).cerrarSesion(mensaje: 'Un administrador cerró su sesión. Vuelva a ingresar.');
+    } catch (_) {
+      ref.invalidate(sesionProvider);
+    }
   }
 
   void _actividad([_]) => _ultimaActividad = DateTime.now();
@@ -61,13 +101,7 @@ class _EstructuraState extends ConsumerState<Estructura> {
     _revisando = true;
     try {
       final vigente = await ref.read(repositorioSeguridadProvider).sesionVigente();
-      if (!vigente && mounted) {
-        try {
-          await ref.read(sesionProvider.notifier).cerrarSesion(mensaje: 'Un administrador cerró su sesión. Vuelva a ingresar.');
-        } catch (_) {
-          ref.invalidate(sesionProvider);
-        }
-      }
+      if (!vigente && mounted) await _expulsar();
     } catch (_) {
       // Sin red o error transitorio: se vuelve a revisar en el siguiente ciclo.
     } finally {

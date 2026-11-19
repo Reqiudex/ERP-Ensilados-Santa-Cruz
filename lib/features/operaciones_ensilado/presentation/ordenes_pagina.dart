@@ -38,7 +38,7 @@ class OrdenesPagina extends ConsumerWidget {
     final v = ref.watch(ordenesProvider);
     return Pagina(
       etiquetaRf: 'Operaciones y Procesamiento · RF-08',
-      titulo: 'Órdenes de ensilado',
+      titulo: 'Orden de ensilado y lote',
       subtitulo: 'Al cerrar la orden se crea el lote «en fermentación», ingresa el stock y se descuentan los insumos en la misma transacción.',
       acciones: [
         if (operador) FilledButton.icon(onPressed: () => _abrir(context, ref), icon: const Icon(Icons.add), label: const Text('Abrir orden')),

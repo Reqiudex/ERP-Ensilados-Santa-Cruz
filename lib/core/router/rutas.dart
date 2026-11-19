@@ -21,6 +21,7 @@ import '../../features/seguridad_accesos/presentation/bitacora_pagina.dart';
 import '../../features/seguridad_accesos/presentation/ingreso_paginas.dart';
 import '../../features/seguridad_accesos/presentation/inicio_pagina.dart';
 import '../../features/seguridad_accesos/presentation/mantenimiento_pagina.dart';
+import '../../features/seguridad_accesos/presentation/parametros_pagina.dart';
 import '../../features/seguridad_accesos/presentation/matriz_pagina.dart';
 import '../../features/seguridad_accesos/presentation/politicas_pagina.dart';
 import '../../features/seguridad_accesos/presentation/sesion.dart';
@@ -49,6 +50,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         '/seguridad/sesiones' => const SesionesPagina(),
         '/seguridad/bitacora' => const BitacoraPagina(),
         '/seguridad/mantenimiento' => const MantenimientoPagina(),
+        '/seguridad/parametros' => const ParametrosPagina(),
         '/operaciones/bascula' => const BasculaPagina(),
         '/operaciones/ordenes' => const OrdenesPagina(),
         '/operaciones/insumos' => const InsumosPagina(),
@@ -71,7 +73,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 
   const rutasInternas = [
     '/inicio', '/mis-solicitudes', '/seguridad/usuarios', '/seguridad/aprobaciones', '/seguridad/permisos',
-    '/seguridad/politicas', '/seguridad/sesiones', '/seguridad/bitacora', '/seguridad/mantenimiento',
+    '/seguridad/politicas', '/seguridad/sesiones', '/seguridad/bitacora', '/seguridad/mantenimiento', '/seguridad/parametros',
     '/operaciones/bascula', '/operaciones/ordenes', '/operaciones/insumos', '/operaciones/fermentacion',
     '/inventario/lotes', '/inventario/sedes', '/inventario/catalogo', '/inventario/guias', '/comercial/clientes',
     '/comercial/compras', '/comercial/pedidos', '/comercial/ventas', '/comercial/despachos', '/reportes/rendimiento',

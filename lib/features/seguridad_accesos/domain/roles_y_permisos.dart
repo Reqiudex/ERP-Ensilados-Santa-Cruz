@@ -159,13 +159,18 @@ enum Accion {
   bool permitida(Rol? rol) => rol == Rol.superadmin || (rol != null && roles.contains(rol));
 }
 
-/// Descripción operativa de cada rol (sección 3.1 de la tesis).
+/// Descripción operativa de cada rol (tabla de usuarios del sistema de la tesis).
 String descripcionRol(Rol r) => switch (r) {
-      Rol.adminSistema => 'Administra cuentas, contraseñas, sesiones, respaldos y parámetros; sin permisos de negocio.',
-      Rol.operadorCentro => 'Registra báscula, órdenes, insumos, fermentación, guías y despachos de su centro.',
-      Rol.ejecutivoComercial => 'Clientes, proveedores, compras, cotizaciones, pedidos y notas de venta.',
-      Rol.cajeroContador => 'Registra cobros y pagos; consulta ventas, compras y cartera.',
-      Rol.gerenteGeneral => 'Aprueba solicitudes y consulta todos los módulos y reportes.',
+      Rol.adminSistema => 'Responsable técnico de la plataforma en la oficina central. Crea y suspende cuentas, fija las políticas '
+          'de contraseñas, cierra sesiones y gestiona los respaldos y parámetros. No opera el negocio ni se asigna roles.',
+      Rol.operadorCentro => 'Única persona que registra en cada centro de acopio (San Ramón, San Julián y San Rafael de Velasco). '
+          'Registra pesajes, órdenes de ensilado, insumos, fermentación, guías, recepciones y despachos de su centro.',
+      Rol.ejecutivoComercial => 'Área comercial de la oficina central. Registra clientes, proveedores, compras, cotizaciones, '
+          'pedidos y notas de venta. No cobra ni paga.',
+      Rol.cajeroContador => 'Área de finanzas y auditoría. Registra los cobros de las notas de venta y los pagos de compras '
+          'aprobadas, y revisa la cartera.',
+      Rol.gerenteGeneral => 'Dueño y gerente de la empresa. Aprueba o rechaza las solicitudes sensibles y consulta la bitácora, '
+          'el stock de todas las sedes y los reportes.',
       Rol.superadmin => 'Acceso total a todos los módulos y sedes.',
     };
 
