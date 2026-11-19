@@ -1,0 +1,43 @@
+name: Restauración de un respaldo (requiere aprobación del gerente)
+
+on:
+  workflow_dispatch:
+    inputs:
+      solicitud:
+        description: 'ID de la solicitud de restauración aprobada por el gerente'
+        required: true
+      ejecucion:
+        description: 'ID de la ejecución del flujo de respaldo que contiene el archivo'
+        required: true
+      confirmar:
+        description: 'Escriba RESTAURAR para confirmar'
+        required: true
+
+permissions:
+  actions: read
+
+jobs:
+  restaurar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar confirmación y aprobación
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          [ "${{ inputs.confirmar }}" = "RESTAURAR" ] || { echo "Confirmación incorrecta"; exit 1; }
+          estado=$(docker run --rm postgres:17 psql "$SUPABASE_DB_URL" -At -c "select estado from public.solicitudes_aprobacion where id = '${{ inputs.solicitud }}' and tipo = 'restauracion' and aprobado_por is not null and aprobado_por <> registrado_por")
+          echo "Estado de la solicitud: $estado"
+          [ "$estado" = "aprobada" ] || { echo "La restauración no está aprobada por el gerente"; exit 1; }
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.ejecucion }}
+          github-token: ${{ github.token }}
+          path: respaldo
+      - name: Comprobar SHA-256 y restaurar
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          cd respaldo/*/ && sha256sum -c *.sha256
+          archivo=$(ls *.dump)
+          docker run --rm -v "$PWD:/r" postgres:17 pg_restore --dbname="$SUPABASE_DB_URL" --clean --if-exists --no-owner --no-privileges --single-transaction "/r/$archivo"
+          docker run --rm postgres:17 psql "$SUPABASE_DB_URL" -c "insert into public.bitacora_eventos (accion, tabla, registro_id, datos_despues) values ('restauracion', 'respaldos', '${{ inputs.solicitud }}', jsonb_build_object('archivo', '$archivo', 'estado', 'ejecutada', 'ejecucion', '${{ github.run_id }}'))"

@@ -1,0 +1,55 @@
+name: Respaldo de la base de datos
+
+# Respaldo diario (07:00 UTC = 03:00 en Bolivia) y revisión cada 30 minutos de los respaldos manuales
+# pedidos desde el sistema (RF-06). La cadena de conexión va solo en el Secret SUPABASE_DB_URL.
+on:
+  schedule:
+    - cron: '0 7 * * *'
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  respaldo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ¿Corresponde respaldar?
+        id: decidir
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then echo "::warning::Falta el Secret SUPABASE_DB_URL: no se respalda"; echo "hacer=no" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ "${{ github.event_name }}" != "schedule" ] || [ "${{ github.event.schedule }}" = "0 7 * * *" ]; then
+            echo "hacer=si" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          pedidos=$(docker run --rm postgres:17 psql "$SUPABASE_DB_URL" -At -c "select count(*) from public.bitacora_eventos p where p.accion = 'respaldo_pedido' and p.fecha_servidor > coalesce((select max(fecha_servidor) from public.bitacora_eventos where accion = 'respaldo'), '-infinity')")
+          echo "Respaldos manuales pendientes: $pedidos"
+          [ "$pedidos" != "0" ] && echo "hacer=si" >> "$GITHUB_OUTPUT" || echo "hacer=no" >> "$GITHUB_OUTPUT"
+      - name: pg_dump
+        if: steps.decidir.outputs.hacer == 'si'
+        id: volcado
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          archivo="respaldo-$(date -u +%Y%m%d-%H%M).dump"
+          docker run --rm -v "$PWD:/r" postgres:17 pg_dump "$SUPABASE_DB_URL" --format=custom --no-owner --no-privileges \
+            --schema=public --schema=app --file="/r/$archivo"
+          sha=$(sha256sum "$archivo" | cut -d' ' -f1)
+          bytes=$(stat -c%s "$archivo")
+          echo "archivo=$archivo" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "bytes=$bytes" >> "$GITHUB_OUTPUT"
+          echo "$sha  $archivo" > "$archivo.sha256"
+      - uses: actions/upload-artifact@v4
+        if: steps.decidir.outputs.hacer == 'si'
+        with:
+          name: ${{ steps.volcado.outputs.archivo }}
+          path: |
+            ${{ steps.volcado.outputs.archivo }}
+            ${{ steps.volcado.outputs.archivo }}.sha256
+          retention-days: 30
+      - name: Registrar el respaldo en la bitácora
+        if: steps.decidir.outputs.hacer == 'si'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          docker run --rm postgres:17 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "insert into public.bitacora_eventos (accion, tabla, datos_despues) values ('respaldo', 'respaldos', jsonb_build_object('archivo', '${{ steps.volcado.outputs.archivo }}', 'bytes', ${{ steps.volcado.outputs.bytes }}, 'sha256', '${{ steps.volcado.outputs.sha }}', 'ejecucion', '${{ github.run_id }}'))"
