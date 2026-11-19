@@ -31,7 +31,7 @@ class Exportador {
       margin: const pw.EdgeInsets.all(28),
       header: (c) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
         pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [
-          if (logo != null) pw.Image(logo, height: 34),
+          if (logo != null) pw.Image(logo, height: 30),
           if (logo != null) pw.SizedBox(width: 10),
           pw.Expanded(
             child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
