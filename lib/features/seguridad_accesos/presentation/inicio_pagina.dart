@@ -33,13 +33,13 @@ final indicadoresInicioProvider = FutureProvider.autoDispose<Map<String, dynamic
       await intentar(() async => r['lotes'] = await api.consultar('lotes', 'id, estado'));
       await intentar(() async => r['guias'] = await api.consultar('guias_transferencia', 'id, sede_destino', igual: {'estado': 'en_transito'}));
       await intentar(() async => r['despachos'] = await api.rpcLista('despachos_pendientes'));
-    case Rol.ejecutivoComercial || Rol.cajeroContador || Rol.gerenteGeneral:
+    case Rol.ejecutivoComercial || Rol.cajeroContador || Rol.gerenteGeneral || Rol.superadmin:
       await intentar(() async => r['existencias'] = await api.rpcLista('reporte_existencias'));
       await intentar(() async => r['notas'] = await api.consultar('notas_venta', 'id, estado, saldo, total, fecha_registro'));
-      if (perfil.rol == Rol.cajeroContador || perfil.rol == Rol.gerenteGeneral) {
+      if (perfil.rol == Rol.cajeroContador || perfil.rol.comoGerente) {
         await intentar(() async => r['compras'] = await api.consultar('compras', 'id, estado, saldo'));
       }
-      if (perfil.rol == Rol.gerenteGeneral) {
+      if (perfil.rol.comoGerente) {
         await intentar(() async => r['bandeja'] = await api.rpcLista('bandeja_aprobaciones', {'p_estado': 'pendiente'}));
         await intentar(() async => r['rendimiento'] = await api.rpcLista('reporte_rendimiento'));
       }
@@ -138,7 +138,7 @@ class _Indicadores extends ConsumerWidget {
         final ventasMes = notas
             .where((n) => n['estado'] != 'anulada' && aFecha(n['fecha_registro'])?.month == mes.month && aFecha(n['fecha_registro'])?.year == mes.year)
             .fold<double>(0, (a, n) => a + aNumero(n['total']));
-        if (perfil.rol == Rol.gerenteGeneral) {
+        if (perfil.rol.comoGerente) {
           tarjetas.add(TarjetaDato(titulo: 'Solicitudes por aprobar', valor: '${l('bandeja').length}', icono: Icons.fact_check_outlined,
               color: l('bandeja').isEmpty ? Colores.exito : Colores.peligro, alTocar: () => context.go('/seguridad/aprobaciones')));
           final alertas = l('rendimiento').where((x) => '${x['dictamen_rendimiento']}'.startsWith('Alerta')).length;

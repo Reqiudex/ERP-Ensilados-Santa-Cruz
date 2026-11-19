@@ -6,7 +6,8 @@ enum Rol {
   operadorCentro('operador_centro', 'Operador de centro de acopio'),
   ejecutivoComercial('ejecutivo_comercial', 'Ejecutivo comercial'),
   cajeroContador('cajero_contador', 'Cajero o contador'),
-  gerenteGeneral('gerente_general', 'Gerente general');
+  gerenteGeneral('gerente_general', 'Gerente general'),
+  superadmin('superadmin', 'Superadministrador');
 
   const Rol(this.codigo, this.nombre);
   final String codigo;
@@ -19,7 +20,13 @@ enum Rol {
     return null;
   }
 
-  bool get privilegiado => this == Rol.adminSistema || this == Rol.gerenteGeneral;
+  bool get privilegiado => this == Rol.adminSistema || this == Rol.gerenteGeneral || this == Rol.superadmin;
+
+  /// Ve y hace lo mismo que el gerente general (el superadministrador incluye todos los roles).
+  bool get comoGerente => this == Rol.gerenteGeneral || this == Rol.superadmin;
+
+  /// Los 5 roles de la matriz de permisos de la tesis (sin el superadministrador).
+  static List<Rol> get deLaMatriz => Rol.values.where((r) => r != Rol.superadmin).toList();
 
   String get nombreCorto => switch (this) {
         Rol.adminSistema => 'Administrador',
@@ -27,6 +34,7 @@ enum Rol {
         Rol.ejecutivoComercial => 'Ejecutivo',
         Rol.cajeroContador => 'Cajero',
         Rol.gerenteGeneral => 'Gerente',
+        Rol.superadmin => 'Superadmin',
       };
 }
 
@@ -117,7 +125,7 @@ enum Submodulo {
   final String requerimiento;
   final Set<Rol> roles;
 
-  bool permitido(Rol? rol) => rol != null && roles.contains(rol);
+  bool permitido(Rol? rol) => rol == Rol.superadmin || (rol != null && roles.contains(rol));
 }
 
 /// Acciones concretas que la interfaz oculta según el rol (la API y la base vuelven a validarlas).
@@ -148,5 +156,5 @@ enum Accion {
 
   const Accion(this.roles);
   final Set<Rol> roles;
-  bool permitida(Rol? rol) => rol != null && roles.contains(rol);
+  bool permitida(Rol? rol) => rol == Rol.superadmin || (rol != null && roles.contains(rol));
 }

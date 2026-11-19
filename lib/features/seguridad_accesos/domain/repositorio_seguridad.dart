@@ -15,6 +15,9 @@ abstract interface class RepositorioSeguridad {
   // RF-01 Gestión de usuarios
   Future<List<Registro>> usuarios();
   Future<List<Registro>> sedes();
+
+  /// Solo el superadministrador: cambia la sede desde la que trabaja.
+  Future<void> cambiarSedeTrabajo(String sedeId);
   Future<Registro> crearUsuario(Registro datos);
   Future<Registro> editarUsuario(String id, Registro datos);
   Future<void> cambiarEstadoUsuario(String id, String accion);

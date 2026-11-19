@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/operaciones_ensilado/data/cola_sincronizacion.dart';
+import '../../features/seguridad_accesos/data/repositorio_seguridad_supabase.dart';
 import '../../features/seguridad_accesos/domain/reglas_seguridad.dart';
 import '../../features/seguridad_accesos/domain/roles_y_permisos.dart';
 import '../../features/seguridad_accesos/presentation/sesion.dart';
@@ -175,6 +176,7 @@ class _Menu extends ConsumerWidget {
                 Text(perfil.sede, style: const TextStyle(fontSize: 12, color: Colores.textoSuave), overflow: TextOverflow.ellipsis),
               ]),
             ),
+            if (perfil.rol == Rol.superadmin) const _SelectorSede(),
           ]),
         ),
         item('Inicio', Icons.dashboard_outlined, '/inicio'),
@@ -292,3 +294,37 @@ class _MenuUsuario extends ConsumerWidget {
   }
 }
 
+
+
+/// Superadministrador: elige la sede desde la que trabaja (para operar como cualquier centro de acopio).
+class _SelectorSede extends ConsumerWidget {
+  const _SelectorSede();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return IconButton(
+      tooltip: 'Cambiar sede de trabajo',
+      icon: const Icon(Icons.swap_horiz),
+      onPressed: () async {
+        final sedes = await ref.read(repositorioSeguridadProvider).sedes();
+        if (!context.mounted) return;
+        final elegida = await showDialog<String>(
+          context: context,
+          builder: (c) => SimpleDialog(
+            title: const Text('Sede de trabajo'),
+            children: [
+              for (final s in sedes.where((s) => s['activa'] != false))
+                SimpleDialogOption(onPressed: () => Navigator.pop(c, '${s['id']}'), child: Text('${s['nombre']}')),
+            ],
+          ),
+        );
+        if (elegida == null) return;
+        try {
+          await ref.read(sesionProvider.notifier).cambiarSede(elegida);
+        } catch (e) {
+          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        }
+      },
+    );
+  }
+}

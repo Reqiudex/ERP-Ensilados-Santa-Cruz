@@ -60,6 +60,14 @@ class SesionControlador extends AsyncNotifier<EstadoSesion> {
     if (p != null) state = AsyncData(EstadoSesion(perfil: p.copiar(debeCambiarClave: false)));
   }
 
+  /// Superadministrador: cambia la sede de trabajo y recarga el perfil.
+  Future<void> cambiarSede(String sedeId) async {
+    final repo = ref.read(repositorioSeguridadProvider);
+    await repo.cambiarSedeTrabajo(sedeId);
+    final p = await repo.perfilActual();
+    if (p != null) state = AsyncData(EstadoSesion(perfil: p));
+  }
+
   /// Bloqueo manual o al quedarse sin señal (Android).
   void bloquear() {
     final s = state.value;

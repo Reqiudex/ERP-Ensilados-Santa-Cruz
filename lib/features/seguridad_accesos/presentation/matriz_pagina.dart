@@ -43,7 +43,7 @@ class MatrizPagina extends ConsumerWidget {
               columns: [
                 const DataColumn(label: Text('Módulo')),
                 const DataColumn(label: Text('Operación')),
-                for (final r in Rol.values)
+                for (final r in Rol.deLaMatriz)
                   DataColumn(
                       label: SizedBox(
                           width: 96,
@@ -56,7 +56,7 @@ class MatrizPagina extends ConsumerWidget {
                   DataRow(cells: [
                     DataCell(Text(o.modulo, style: const TextStyle(color: Colores.textoSuave))),
                     DataCell(SizedBox(width: 260, child: Text(o.operacion))),
-                    for (final r in Rol.values)
+                    for (final r in Rol.deLaMatriz)
                       DataCell(Container(
                         color: r == mio ? Colores.primarioClaro.withValues(alpha: .25) : null,
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
