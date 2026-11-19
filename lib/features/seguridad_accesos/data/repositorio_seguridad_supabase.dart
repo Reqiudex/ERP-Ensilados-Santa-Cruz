@@ -202,8 +202,8 @@ class RepositorioSeguridadSupabase implements RepositorioSeguridad {
   Future<List<Registro>> bitacora({DateTime? desde, DateTime? hasta, String? accion, String? tabla, String? usuarioId}) async {
     var q = _api.cliente.from('bitacora_eventos').select(
         'id, accion, tabla, registro_id, datos_antes, datos_despues, ip, fecha_dispositivo, fecha_servidor, '
-        'usuario:usuarios!bitacora_eventos_usuario_id_fkey(nombre_completo), '
-        'aprobador:usuarios!bitacora_eventos_aprobador_id_fkey(nombre_completo)');
+        // Columnas calculadas del servidor: el nombre se ve aunque la cuenta no aparezca en Gestión de usuarios.
+        'nombre_registro, nombre_aprobador');
     if (desde != null) q = q.gte('fecha_servidor', desde.toUtc().toIso8601String());
     if (hasta != null) q = q.lt('fecha_servidor', hasta.add(const Duration(days: 1)).toUtc().toIso8601String());
     if (accion != null) q = q.eq('accion', accion);

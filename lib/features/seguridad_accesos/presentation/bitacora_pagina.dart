@@ -113,8 +113,8 @@ class _BitacoraPaginaState extends ConsumerState<BitacoraPagina> {
               columnas: [
                 Columna('Fecha servidor', (e) => fechaHora(e['fecha_servidor'])),
                 Columna('Fecha dispositivo', (e) => fechaHora(e['fecha_dispositivo'])),
-                Columna('Registró', (e) => '${e['usuario']?['nombre_completo'] ?? 'Sistema / anónimo'}'),
-                Columna('Aprobó', (e) => '${e['aprobador']?['nombre_completo'] ?? '—'}'),
+                Columna('Registró', (e) => '${e['nombre_registro'] ?? 'Sistema / anónimo'}'),
+                Columna('Aprobó', (e) => '${e['nombre_aprobador'] ?? '—'}'),
                 Columna('Acción', (e) => _acciones[e['accion']] ?? '${e['accion']}',
                     celda: (e) => Text(_acciones[e['accion']] ?? '${e['accion']}',
                         style: TextStyle(
@@ -214,7 +214,7 @@ class InspectorCambios extends StatelessWidget {
         child: SingleChildScrollView(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('${evento['tabla']} · ${fechaHora(evento['fecha_servidor'])} · '
-                '${evento['usuario']?['nombre_completo'] ?? 'Sistema / anónimo'}'),
+                '${evento['nombre_registro'] ?? 'Sistema / anónimo'}'),
             const SizedBox(height: 12),
             ancho
                 ? IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: cuerpo))
