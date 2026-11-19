@@ -73,7 +73,7 @@ class _VentasPaginaState extends ConsumerState<VentasPagina> {
     final repo = ref.read(repositorioComercialProvider);
     return Pagina(
       etiquetaRf: 'Comercial y Abastecimiento · RF-18',
-      titulo: cajero ? 'Cobros de notas de venta' : 'Facturación y ventas',
+      titulo: 'Ventas, cobros y anulaciones',
       subtitulo: 'Quien vende no cobra: el ejecutivo emite la nota y solo el cajero registra cobros. '
           'Notas y recibos con numeración correlativa; la factura del SIN se emite en el sistema externo y aquí se guarda su número.',
       alRefrescar: () async => ref.invalidate(notasProvider),

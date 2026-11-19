@@ -25,13 +25,14 @@ class ModuloMenu {
 const modulosMenu = <ModuloMenu>[
   ModuloMenu('Seguridad y Accesos', Icons.admin_panel_settings_outlined, [
     EntradaMenu(Submodulo.usuarios, '/seguridad/usuarios', Icons.people_alt_outlined),
+    EntradaMenu(Submodulo.rbac, '/seguridad/permisos', Icons.grid_view_outlined, titulo: 'Control de Acceso (RBAC)'),
     EntradaMenu(Submodulo.rbac, '/seguridad/aprobaciones', Icons.fact_check_outlined,
         titulo: 'Bandeja de aprobaciones', roles: {Rol.gerenteGeneral}),
-    EntradaMenu(Submodulo.rbac, '/seguridad/permisos', Icons.grid_view_outlined, titulo: 'Control de acceso (RBAC)'),
     EntradaMenu(Submodulo.politicas, '/seguridad/politicas', Icons.password_outlined),
     EntradaMenu(Submodulo.sesiones, '/seguridad/sesiones', Icons.devices_outlined),
     EntradaMenu(Submodulo.bitacora, '/seguridad/bitacora', Icons.history_edu_outlined),
     EntradaMenu(Submodulo.mantenimiento, '/seguridad/mantenimiento', Icons.storage_outlined),
+    EntradaMenu(Submodulo.mantenimiento, '/seguridad/parametros', Icons.tune_outlined, titulo: 'Parámetros del sistema'),
   ]),
   ModuloMenu('Operaciones y Procesamiento', Icons.agriculture_outlined, [
     EntradaMenu(Submodulo.bascula, '/operaciones/bascula', Icons.scale_outlined),

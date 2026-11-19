@@ -27,7 +27,7 @@ class DespachosPagina extends ConsumerWidget {
     final enLinea = ref.watch(enLineaProvider);
     return Pagina(
       etiquetaRf: 'Comercial y Abastecimiento · RF-19',
-      titulo: 'Control de despachos',
+      titulo: 'Despachos',
       subtitulo: 'El despacho exige una nota de venta emitida por el ejecutivo. Si el peso supera el ${dec1(perfil.toleranciaDespacho)} % '
           'sobre lo vendido por tonelada, queda pendiente del gerente.',
       alRefrescar: () async {

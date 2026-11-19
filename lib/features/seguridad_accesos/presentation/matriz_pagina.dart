@@ -6,7 +6,8 @@ import '../../../core/widgets/componentes.dart';
 import '../domain/roles_y_permisos.dart';
 import 'sesion.dart';
 
-/// RF-02 Matriz visual de permisos (solo lectura: los cinco roles son fijos).
+/// RF-02 Roles, permisos y bandeja de aprobaciones: qué hace cada rol y matriz de permisos (solo lectura: los cinco
+/// roles son fijos).
 class MatrizPagina extends ConsumerWidget {
   const MatrizPagina({super.key});
 
@@ -24,7 +25,7 @@ class MatrizPagina extends ConsumerWidget {
         };
     return Pagina(
       etiquetaRf: 'Seguridad y Accesos · RF-02',
-      titulo: 'Control de acceso basado en roles',
+      titulo: 'Roles y permisos',
       subtitulo: 'Matriz de permisos de la tesis. Cada control se aplica en tres lugares: la interfaz oculta la opción, '
           'la API responde 403 y la base de datos lo rechaza.',
       hijos: [
@@ -36,34 +37,18 @@ class MatrizPagina extends ConsumerWidget {
             ),
         ]),
         const SizedBox(height: 16),
+        const Aviso(
+            '¿Para qué sirve? El control de acceso basado en roles (RBAC, RF-02 de la tesis) decide qué puede ver y hacer cada '
+            'persona según su rol: el menú solo muestra lo autorizado, la API responde 403 y la base de datos rechaza cualquier '
+            'otra operación. Los roles son fijos (cinco, según la tesis); el administrador asigna el rol a cada cuenta en '
+            '«Gestión de usuarios» y los roles privilegiados los aprueba el gerente.',
+            icono: Icons.help_outline),
         Seccion(
-          titulo: 'Roles del sistema',
+          titulo: 'Roles del sistema (toque un rol para ver todo lo que hace)',
           icono: Icons.badge_outlined,
-          hijo: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              columnSpacing: 18,
-              dataRowMinHeight: 48,
-              dataRowMaxHeight: 48,
-              columns: const [
-                DataColumn(label: Text('Rol')),
-                DataColumn(label: Text('Descripción operativa')),
-                DataColumn(label: Text('Lectura')),
-                DataColumn(label: Text('Escritura')),
-                DataColumn(label: Text('Eliminación')),
-              ],
-              rows: [
-                for (final r in roles)
-                  DataRow(color: WidgetStatePropertyAll(r == mio ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: .35) : null), cells: [
-                    _celda(r.nombre, 180, negrita: true),
-                    _celda(descripcionRol(r), 320),
-                    _celda(modulosDeRol(r, escritura: false).join(', '), 240),
-                    _celda(modulosDeRol(r, escritura: true).join(', '), 240),
-                    _celda('Ninguno: las bajas son lógicas', 200),
-                  ]),
-              ],
-            ),
-          ),
+          hijo: Column(children: [
+            for (final r in roles) _RolExpandible(rol: r, propio: r == mio, color: color),
+          ]),
         ),
         const SizedBox(height: 16),
         if (mio != null) Aviso('Su rol: ${mio.nombre}. Su columna aparece resaltada.'),
@@ -146,13 +131,85 @@ class _Regla extends StatelessWidget {
       );
 }
 
-DataCell _celda(String t, double ancho, {bool negrita = false}) => DataCell(Align(
-      alignment: Alignment.centerLeft,
-      child: SizedBox(
-        width: ancho,
-        child: Tooltip(
-          message: t,
-          child: Text(t, maxLines: 1, overflow: TextOverflow.ellipsis, style: negrita ? const TextStyle(fontWeight: FontWeight.w700) : null),
+/// Un rol con su descripción operativa completa; al expandirlo muestra cada operación que hace, por módulo, y los
+/// submódulos del menú a los que entra.
+class _RolExpandible extends StatelessWidget {
+  const _RolExpandible({required this.rol, required this.propio, required this.color});
+  final Rol rol;
+  final bool propio;
+  final Color Function(Acceso) color;
+
+  @override
+  Widget build(BuildContext context) {
+    final tema = Theme.of(context);
+    final operaciones = rol == Rol.superadmin ? matrizPermisos : matrizPermisos.where((o) => (o.accesos[rol] ?? const []).isNotEmpty).toList();
+    final modulos = <String, List<OperacionMatriz>>{};
+    for (final o in operaciones) {
+      (modulos[o.modulo] ??= []).add(o);
+    }
+    final submodulos = Submodulo.values.where((s) => s.permitido(rol)).toList();
+    final sinAcceso = rol == Rol.superadmin ? const <OperacionMatriz>[] : matrizPermisos.where((o) => (o.accesos[rol] ?? const []).isEmpty).toList();
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      color: propio ? tema.colorScheme.primaryContainer.withValues(alpha: .35) : null,
+      child: ExpansionTile(
+        shape: const Border(),
+        leading: CircleAvatar(
+          backgroundColor: tema.colorScheme.primaryContainer,
+          foregroundColor: tema.colorScheme.onPrimaryContainer,
+          child: Text(rol.nombreCorto.substring(0, 1)),
         ),
+        title: Text(propio ? '${rol.nombre} (su rol)' : rol.nombre, style: const TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text(descripcionRol(rol)),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        expandedCrossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Entra a ${submodulos.length} submódulos', style: tema.textTheme.titleSmall),
+          const SizedBox(height: 6),
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final s in submodulos) Chip(visualDensity: VisualDensity.compact, label: Text('${s.requerimiento} ${s.titulo}')),
+          ]),
+          const SizedBox(height: 14),
+          Text('Qué hace en cada operación', style: tema.textTheme.titleSmall),
+          for (final m in modulos.entries) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 10, bottom: 4),
+              child: Text(m.key, style: tema.textTheme.labelLarge?.copyWith(color: tema.colorScheme.primary)),
+            ),
+            for (final o in m.value)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  SizedBox(width: 260, child: Text(o.operacion)),
+                  Expanded(
+                    child: Wrap(spacing: 6, runSpacing: 4, children: [
+                      if (rol == Rol.superadmin)
+                        const Text('Todo (registra, solicita, aprueba, consulta y verifica)')
+                      else
+                        for (final a in o.accesos[rol]!)
+                          Row(mainAxisSize: MainAxisSize.min, children: [
+                            CircleAvatar(
+                                radius: 10,
+                                backgroundColor: color(a),
+                                child: Text(a.letra, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700))),
+                            const SizedBox(width: 4),
+                            Text(a.descripcion),
+                          ]),
+                    ]),
+                  ),
+                ]),
+              ),
+          ],
+          if (sinAcceso.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text('No puede (${sinAcceso.length} operaciones)', style: tema.textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text(sinAcceso.map((o) => o.operacion).join(' · '), style: tema.textTheme.bodySmall),
+          ],
+          const SizedBox(height: 10),
+          Text('Eliminación: ninguna. Las bajas son lógicas (suspender, anular) y quedan en la bitácora.', style: tema.textTheme.bodySmall),
+        ],
       ),
-    ));
+    );
+  }
+}

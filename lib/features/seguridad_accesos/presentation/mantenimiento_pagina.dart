@@ -1,8 +1,14 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/formato.dart';
 import '../../../core/conexion/conexion.dart';
+import '../../../core/exportar/guardar_en_ruta.dart';
 import '../../../core/supabase/api.dart';
 import '../../../core/tema/tema.dart';
 import '../../../core/widgets/componentes.dart';
@@ -13,9 +19,11 @@ import 'politicas_pagina.dart';
 import 'sesion.dart';
 
 final respaldosProvider = FutureProvider.autoDispose<List<Fila>>((ref) => ref.watch(repositorioSeguridadProvider).respaldos());
-final granosParametrosProvider = FutureProvider.autoDispose<List<Fila>>((ref) => ref.watch(repositorioSeguridadProvider).granos());
+final githubProvider = FutureProvider.autoDispose<Fila>((ref) => ref.watch(repositorioSeguridadProvider).estadoGithub());
+final mantenimientoProvider = FutureProvider.autoDispose<Fila>((ref) => ref.watch(repositorioSeguridadProvider).estadoMantenimiento());
 
-/// RF-06 Mantenimiento y operaciones de la base de datos: respaldos, restauración aprobada y parámetros.
+/// RF-06 Mantenimiento y operaciones de la base de datos: copias de respaldo (en la PC y en GitHub), programación,
+/// restauración aprobada por el gerente y mantenimiento automático.
 class MantenimientoPagina extends ConsumerWidget {
   const MantenimientoPagina({super.key});
 
@@ -24,38 +32,18 @@ class MantenimientoPagina extends ConsumerWidget {
     final admin = Accion.pedirRespaldo.permitida(ref.watch(perfilProvider)?.rol);
     final lat = ref.watch(latenciaProvider);
     final resp = ref.watch(respaldosProvider);
+    final mant = ref.watch(mantenimientoProvider);
     final repo = ref.read(repositorioSeguridadProvider);
+    final ultimo = resp.value?.where((r) => r['accion'] == 'respaldo').firstOrNull;
     return Pagina(
       etiquetaRf: 'Seguridad y Accesos · RF-06',
-      titulo: 'Mantenimiento de la base de datos',
-      subtitulo: 'Respaldos con GitHub Actions (pg_dump) según la programación. La restauración solo se ejecuta tras la aprobación del gerente.',
-      acciones: [
-        if (admin)
-          OutlinedButton.icon(
-            icon: const Icon(Icons.auto_fix_high_outlined),
-            label: const Text('Optimizar base de datos'),
-            onPressed: () async {
-              final n = await ejecutar(context, repo.optimizarBase);
-              if (n != null && context.mounted) avisar(context, 'Estadísticas e índices actualizados en $n tablas (ANALYZE).');
-              ref.invalidate(respaldosProvider);
-            },
-          ),
-        if (admin)
-          FilledButton.icon(
-            icon: const Icon(Icons.backup_outlined),
-            label: const Text('Respaldo manual ahora'),
-            onPressed: () async {
-              await ejecutar(context, () async {
-                await repo.pedirRespaldo();
-                return true;
-              }, exito: 'Respaldo en cola: el flujo programado lo genera en los próximos minutos.');
-              ref.invalidate(respaldosProvider);
-            },
-          ),
-      ],
+      titulo: 'Mantenimiento y operaciones de la base de datos',
+      subtitulo: 'Copias de respaldo en su PC y en su cuenta de GitHub, programación automática y restauración con aprobación del gerente.',
       alRefrescar: () async {
         ref.invalidate(respaldosProvider);
         ref.invalidate(latenciaProvider);
+        ref.invalidate(githubProvider);
+        ref.invalidate(mantenimientoProvider);
       },
       hijos: [
         FilaTarjetas([
@@ -72,28 +60,46 @@ class MantenimientoPagina extends ConsumerWidget {
             error: (_, _) => const TarjetaDato(titulo: 'Conexión con Supabase', valor: 'Error', icono: Icons.error_outline),
           ),
           TarjetaDato(
-            titulo: 'Respaldos registrados',
-            valor: '${resp.value?.where((r) => r['accion'] == 'respaldo').length ?? '…'}',
+            titulo: 'Último respaldo',
+            valor: ultimo == null ? '—' : fechaHora(ultimo['fecha']),
             icono: Icons.inventory_2_outlined,
             color: Colores.ambarOscuro,
+            detalle: ultimo == null ? 'Aún no hay respaldos' : 'Destino: ${_destino(ultimo['datos'])}',
+          ),
+          TarjetaDato(
+            titulo: 'Mantenimiento automático',
+            valor: mant.value?['ultima'] == null ? 'Pendiente' : fechaHora(mant.value!['ultima']),
+            icono: Icons.auto_fix_high_outlined,
+            color: Colores.exito,
+            detalle: '${mant.value?['programacion'] ?? 'Todos los días a las 04:00 (Bolivia)'} · actualiza estadísticas e índices',
           ),
         ]),
-        if (admin) const _ProgramacionRespaldos(),
+        if (admin) ...[
+          const _RespaldoLocal(),
+          const _RespaldoGithub(),
+          const _ProgramacionRespaldos(),
+        ],
         Asincrono(resp,
             datos: (l) => TablaDatos(
-                  titulo: 'Historial de respaldos',
+                  titulo: 'Historial de respaldos y mantenimiento',
                   filas: l,
                   columnas: [
                     Columna('Fecha', (r) => fechaHora(r['fecha'])),
                     Columna('Evento', (r) => switch (r['accion']) {
                           'respaldo' => 'Respaldo generado',
+                          'respaldo_fallido' => 'Respaldo fallido',
                           'respaldo_pedido' => 'Respaldo manual pedido',
                           'restauracion' => 'Restauración aprobada',
+                          'optimizacion' => r['datos']?['automatico'] == true ? 'Mantenimiento automático' : 'Mantenimiento manual',
+                          'github_vinculado' => 'GitHub vinculado',
+                          'github_desvinculado' => 'GitHub desvinculado',
                           _ => '${r['accion']}',
                         }),
-                    Columna('Archivo', (r) => '${r['datos']?['archivo'] ?? r['datos']?['respaldo'] ?? '—'}'),
-                    Columna('Tamaño', (r) => r['datos']?['bytes'] == null ? '—' : '${dec2(aNumero(r['datos']['bytes']) / 1048576)} MB', numerica: true),
-                    Columna('SHA-256', (r) => '${r['datos']?['sha256'] ?? r['datos']?['estado'] ?? '—'}', ancho: 300),
+                    Columna('Destino', (r) => _destino(r['datos'])),
+                    Columna('Archivo', (r) => '${r['datos']?['archivo'] ?? r['datos']?['respaldo'] ?? r['datos']?['repositorio'] ?? '—'}', ancho: 260),
+                    Columna('Tamaño', (r) => r['datos']?['bytes'] == null ? '—' : '${dec2(aNumero(r['datos']['bytes']) / 1048576)} MB'),
+                    Columna('SHA-256 / detalle', (r) => '${r['datos']?['sha256'] ?? r['datos']?['error'] ?? r['datos']?['estado'] ?? (r['datos']?['tablas'] != null ? '${r['datos']['tablas']} tablas' : '—')}',
+                        ancho: 300),
                   ],
                   acciones: admin
                       ? (r) => [
@@ -113,123 +119,256 @@ class MantenimientoPagina extends ConsumerWidget {
                           ]
                       : null,
                 )),
-        if (admin) ...[
-          const _ParametrosGranos(),
-          const _ParametrosGenerales(),
-        ],
+        if (admin)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              icon: const Icon(Icons.auto_fix_high_outlined),
+              label: const Text('Ejecutar el mantenimiento ahora'),
+              onPressed: () async {
+                final n = await ejecutar(context, repo.optimizarBase);
+                if (n != null && context.mounted) avisar(context, 'Estadísticas e índices actualizados en $n tablas.');
+                ref.invalidate(respaldosProvider);
+                ref.invalidate(mantenimientoProvider);
+              },
+            ),
+          ),
       ],
     );
   }
+
+  static String _destino(dynamic d) => switch (d is Map ? d['destino'] : null) {
+        'local' => 'PC del administrador',
+        'github' => 'GitHub',
+        _ => d is Map && d['repositorio'] != null ? 'GitHub' : 'GitHub Actions (pg_dump)',
+      };
 }
 
-class _ParametrosGranos extends ConsumerWidget {
-  const _ParametrosGranos();
+/// Copia en la PC: el administrador elige la carpeta (por ejemplo C:\Documentos\Respaldos) y el nombre del archivo.
+class _RespaldoLocal extends ConsumerStatefulWidget {
+  const _RespaldoLocal();
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final g = ref.watch(granosParametrosProvider);
-    return Asincrono(g,
-        datos: (l) => Padding(
-              padding: const EdgeInsets.only(top: 20),
-              child: TablaDatos(
-                titulo: 'Parámetros por grano',
-                busqueda: false,
-                exportar: false,
-                filas: l,
-                columnas: [
-                  Columna('Grano', (f) => '${f['nombre']}'),
-                  Columna('Humedad estándar', (f) => '${dec1(f['humedad_estandar'])} %', numerica: true),
-                  Columna('Días de fermentación', (f) => '${f['dias_fermentacion']}', numerica: true),
-                  Columna('Rollos por tonelada (rango normal)', (f) => '${dec2(f['rollos_ton_min'])} a ${dec2(f['rollos_ton_max'])}'),
-                ],
-                acciones: (f) => [
-                  IconButton(
-                    tooltip: 'Editar',
-                    icon: const Icon(Icons.edit_outlined),
-                    onPressed: () => _editar(context, ref, f),
-                  ),
-                ],
-              ),
-            ));
+  ConsumerState<_RespaldoLocal> createState() => _RespaldoLocalState();
+}
+
+class _RespaldoLocalState extends ConsumerState<_RespaldoLocal> {
+  bool _trabajando = false;
+  String? _ultimo;
+
+  Future<void> _guardar() async {
+    setState(() => _trabajando = true);
+    try {
+      final datos = await ref.read(repositorioSeguridadProvider).exportarRespaldo();
+      final bytes = Uint8List.fromList(utf8.encode(const JsonEncoder.withIndent(' ').convert(datos)));
+      final ahora = DateTime.now();
+      String dos(int n) => n.toString().padLeft(2, '0');
+      final nombre = 'respaldo_ensilados_${ahora.year}-${dos(ahora.month)}-${dos(ahora.day)}_${dos(ahora.hour)}${dos(ahora.minute)}';
+      final (r, ruta) = await guardarEnRuta(nombre, bytes);
+      if (!mounted) return;
+      switch (r) {
+        case ResultadoGuardado.guardado:
+          setState(() => _ultimo = ruta ?? '$nombre.json');
+          avisar(context, 'Respaldo guardado: ${ruta ?? '$nombre.json'} (${dec2(bytes.length / 1048576)} MB).');
+        case ResultadoGuardado.descargado:
+          setState(() => _ultimo = '$nombre.json');
+          avisar(context, 'Su navegador no permite elegir la carpeta: el respaldo se descargó en «Descargas».');
+        case ResultadoGuardado.cancelado:
+          avisar(context, 'Guardado cancelado.');
+      }
+      ref.invalidate(respaldosProvider);
+    } catch (e) {
+      if (mounted) avisar(context, '$e', error: true);
+    } finally {
+      if (mounted) setState(() => _trabajando = false);
+    }
   }
 
-  Future<void> _editar(BuildContext context, WidgetRef ref, Fila f) async {
-    final h = TextEditingController(text: '${f['humedad_estandar']}');
-    final d = TextEditingController(text: '${f['dias_fermentacion']}');
-    final mi = TextEditingController(text: '${f['rollos_ton_min']}');
-    final ma = TextEditingController(text: '${f['rollos_ton_max']}');
-    await dialogoFormulario<bool>(
-      context,
-      titulo: 'Parámetros de ${f['nombre']}',
-      contenido: (c, s) => Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: h, decoration: const InputDecoration(labelText: 'Humedad estándar (%)')),
-        const SizedBox(height: 10),
-        TextField(controller: d, decoration: const InputDecoration(labelText: 'Días mínimos de fermentación')),
-        const SizedBox(height: 10),
-        TextField(controller: mi, decoration: const InputDecoration(labelText: 'Rollos por tonelada: mínimo')),
-        const SizedBox(height: 10),
-        TextField(controller: ma, decoration: const InputDecoration(labelText: 'Rollos por tonelada: máximo')),
-      ]),
-      alGuardar: () => ejecutar(context, () async {
-        await ref.read(repositorioSeguridadProvider).actualizarGrano((f['id'] as num).toInt(), aNumero(h.text.replaceAll(',', '.')),
-            int.tryParse(d.text) ?? 21, aNumero(mi.text.replaceAll(',', '.')), aNumero(ma.text.replaceAll(',', '.')));
-        ref.invalidate(granosParametrosProvider);
-        return true;
-      }, exito: 'Parámetros actualizados.'),
+  @override
+  Widget build(BuildContext context) => Seccion(
+        titulo: 'Copia de respaldo en esta PC',
+        icono: Icons.computer_outlined,
+        hijo: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Genera una copia completa de los datos (todas las tablas y los parámetros) en formato JSON y le pide '
+              'elegir la carpeta donde guardarla, por ejemplo C:\\Documentos\\Respaldos. En Chrome y Edge se abre el '
+              'diálogo «Guardar como»; en otros navegadores se guarda en «Descargas».'),
+          const SizedBox(height: 12),
+          Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            FilledButton.icon(
+              icon: _trabajando
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.save_alt_outlined),
+              label: const Text('Guardar respaldo en mi PC…'),
+              onPressed: _trabajando ? null : _guardar,
+            ),
+            if (_ultimo != null) Text('Último guardado: $_ultimo', style: Theme.of(context).textTheme.bodySmall),
+          ]),
+        ]),
+      );
+}
+
+/// Copia externa en un repositorio de GitHub del administrador (otra cuenta u organización).
+class _RespaldoGithub extends ConsumerStatefulWidget {
+  const _RespaldoGithub();
+  @override
+  ConsumerState<_RespaldoGithub> createState() => _RespaldoGithubState();
+}
+
+class _RespaldoGithubState extends ConsumerState<_RespaldoGithub> {
+  bool _enviando = false;
+
+  Future<void> _vincular() async {
+    final repo = TextEditingController();
+    final token = TextEditingController();
+    final rama = TextEditingController(text: 'main');
+    String? error;
+    var verificando = false;
+    final vinculo = await showDialog<(String, String, String, String)>(
+      context: context,
+      barrierDismissible: false,
+      builder: (c) => StatefulBuilder(builder: (c, set) {
+        Future<void> verificar() async {
+          final r = repo.text.trim(), t = token.text.trim();
+          if (!RegExp(r'^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$').hasMatch(r)) {
+            set(() => error = 'Escriba el repositorio como usuario/repositorio.');
+            return;
+          }
+          set(() {
+            verificando = true;
+            error = null;
+          });
+          try {
+            final h = {'Authorization': 'Bearer $t', 'Accept': 'application/vnd.github+json'};
+            final u = await http.get(Uri.parse('https://api.github.com/user'), headers: h).timeout(const Duration(seconds: 15));
+            if (u.statusCode != 200) throw 'GitHub rechazó el token (código ${u.statusCode}).';
+            final cuenta = (jsonDecode(u.body) as Map)['login'] as String;
+            final rp = await http.get(Uri.parse('https://api.github.com/repos/$r'), headers: h).timeout(const Duration(seconds: 15));
+            if (rp.statusCode != 200) throw 'El token no tiene acceso al repositorio $r (código ${rp.statusCode}).';
+            final permisos = (jsonDecode(rp.body) as Map)['permissions'] as Map?;
+            if (permisos != null && permisos['push'] != true) throw 'El token puede leer $r pero no escribir en él.';
+            if (c.mounted) Navigator.pop(c, (r, cuenta, t, rama.text.trim().isEmpty ? 'main' : rama.text.trim()));
+          } catch (e) {
+            set(() {
+              verificando = false;
+              error = '$e';
+            });
+          }
+        }
+
+        return AlertDialog(
+          icon: const Icon(Icons.link),
+          title: const Text('Vincular cuenta de GitHub'),
+          content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('1. Cree (o elija) un repositorio privado en su cuenta, por ejemplo respaldos-ensilados.\n'
+                    '2. Cree un token de acceso «fine-grained» con permiso Contents: Read and write solo para ese repositorio.\n'
+                    '3. Péguelo aquí. Se guarda cifrado en el servidor (Vault) y nunca vuelve a mostrarse.'),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  icon: const Icon(Icons.open_in_new, size: 18),
+                  label: const Text('Crear token en GitHub'),
+                  onPressed: () => launchUrl(Uri.parse('https://github.com/settings/personal-access-tokens/new')),
+                ),
+                const SizedBox(height: 8),
+                TextField(controller: repo, decoration: const InputDecoration(labelText: 'Repositorio (usuario/repositorio)')),
+                const SizedBox(height: 10),
+                TextField(controller: rama, decoration: const InputDecoration(labelText: 'Rama')),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: token,
+                  obscureText: true,
+                  decoration: InputDecoration(labelText: 'Token de acceso', errorText: error, errorMaxLines: 3),
+                ),
+              ]),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: verificando ? null : () => Navigator.pop(c), child: const Text('Cancelar')),
+            FilledButton(onPressed: verificando ? null : verificar, child: Text(verificando ? 'Verificando…' : 'Verificar y vincular')),
+          ],
+        );
+      }),
+    );
+    repo.dispose();
+    token.dispose();
+    rama.dispose();
+    if (vinculo == null || !mounted) return;
+    final ok = await confirmarConClave(context, ref,
+        titulo: 'Confirmar vínculo con GitHub', detalle: 'Los respaldos se enviarán a ${vinculo.$1} (cuenta ${vinculo.$2}). Confirme con su contraseña.');
+    if (!ok || !mounted) return;
+    await ejecutar(context, () async {
+      await ref
+          .read(repositorioSeguridadProvider)
+          .vincularGithub(repositorio: vinculo.$1, cuenta: vinculo.$2, token: vinculo.$3, rama: vinculo.$4);
+      return true;
+    }, exito: 'Cuenta de GitHub vinculada.');
+    ref.invalidate(githubProvider);
+    ref.invalidate(respaldosProvider);
+  }
+
+  Future<void> _desvincular() async {
+    final ok = await confirmarConClave(context, ref,
+        titulo: 'Desvincular GitHub', detalle: 'Se borrará el token guardado. Las copias que ya están en GitHub no se tocan.');
+    if (!ok || !mounted) return;
+    await ejecutar(context, () async {
+      await ref.read(repositorioSeguridadProvider).desvincularGithub();
+      return true;
+    }, exito: 'Cuenta de GitHub desvinculada.');
+    ref.invalidate(githubProvider);
+    ref.invalidate(respaldosProvider);
+  }
+
+  Future<void> _enviar() async {
+    setState(() => _enviando = true);
+    final r = await ejecutar(context, ref.read(repositorioSeguridadProvider).enviarRespaldoGithub);
+    if (mounted) {
+      setState(() => _enviando = false);
+      if (r != null) avisar(context, 'Respaldo enviado a GitHub: ${r['archivo']} (${dec2(aNumero(r['bytes']) / 1048576)} MB).');
+    }
+    ref.invalidate(respaldosProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final g = ref.watch(githubProvider);
+    return Seccion(
+      titulo: 'Copia de respaldo en GitHub',
+      icono: Icons.cloud_upload_outlined,
+      hijo: Asincrono(g, datos: (e) {
+        if (e['vinculado'] != true) {
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Vincule una cuenta de GitHub distinta a la del sistema para guardar ahí una copia externa. '
+                'Con la programación activa, la copia se envía sola cada día (o semana, o mes) a la hora elegida.'),
+            const SizedBox(height: 12),
+            FilledButton.icon(icon: const Icon(Icons.link), label: const Text('Vincular cuenta de GitHub'), onPressed: _vincular),
+          ]);
+        }
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const CircleAvatar(child: Icon(Icons.verified_user_outlined)),
+            title: Text('${e['cuenta']} · ${e['repositorio']}'),
+            subtitle: Text('Rama ${e['rama']} · carpeta respaldos/ · vinculado el ${fechaHora(e['vinculado_en'])}'),
+          ),
+          Wrap(spacing: 12, runSpacing: 8, children: [
+            FilledButton.icon(
+              icon: _enviando
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.cloud_upload_outlined),
+              label: const Text('Enviar copia ahora'),
+              onPressed: _enviando ? null : _enviar,
+            ),
+            OutlinedButton.icon(icon: const Icon(Icons.link_off), label: const Text('Desvincular'), onPressed: _desvincular),
+          ]),
+        ]);
+      }),
     );
   }
 }
 
-class _ParametrosGenerales extends ConsumerWidget {
-  const _ParametrosGenerales();
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final p = ref.watch(parametrosProvider);
-    const editables = {
-      'tolerancia_despacho_pct': 'Tolerancia de despacho (%)',
-      'peso_promedio_rollo_kg': 'Peso promedio por rollo (kg)',
-      'pin_min': 'Dígitos mínimos del PIN',
-      'pin_max': 'Dígitos máximos del PIN',
-      'pin_intentos': 'Intentos de PIN',
-      'horas_sin_sincronizar': 'Horas máximas sin sincronizar',
-    };
-    return Asincrono(p,
-        datos: (todo) => Padding(
-              padding: const EdgeInsets.only(top: 20),
-              child: TablaDatos(
-                titulo: 'Parámetros generales',
-                busqueda: false,
-                exportar: false,
-                filas: [
-                  for (final e in editables.entries) {'clave': e.key, 'nombre': e.value, ...Map<String, dynamic>.from(todo[e.key] as Map? ?? {})},
-                ],
-                columnas: [
-                  Columna('Parámetro', (f) => '${f['nombre']}'),
-                  Columna('Valor', (f) => '${f['valor']}', numerica: true),
-                  Columna('Descripción', (f) => '${f['descripcion'] ?? ''}', ancho: 380),
-                  Columna('Actualizado', (f) => fechaHora(f['actualizado_en'])),
-                ],
-                acciones: (f) => [
-                  IconButton(
-                    tooltip: 'Editar',
-                    icon: const Icon(Icons.edit_outlined),
-                    onPressed: () async {
-                      final t = await pedirTexto(context, f['nombre'] as String, etiqueta: 'Nuevo valor', minimo: 1, inicial: '${f['valor']}');
-                      if (t == null || !context.mounted) return;
-                      await ejecutar(context, () async {
-                        await ref.read(repositorioSeguridadProvider).guardarParametros({f['clave'] as String: num.tryParse(t.replaceAll(',', '.')) ?? t});
-                        ref.invalidate(parametrosProvider);
-                        return true;
-                      }, exito: 'Parámetro guardado.');
-                    },
-                  ),
-                ],
-              ),
-            ));
-  }
-}
-
-
-/// Estrategia y programación automática de respaldos (la lee el flujo «Respaldo de la base de datos»).
+/// Programación automática de respaldos. La revisa cada hora una tarea del servidor (pg_cron) y envía la copia a
+/// GitHub; el flujo «Respaldo de la base de datos» de GitHub Actions usa la misma programación para el pg_dump.
 class _ProgramacionRespaldos extends ConsumerStatefulWidget {
   const _ProgramacionRespaldos();
   @override
@@ -264,7 +403,7 @@ class _ProgramacionRespaldosState extends ConsumerState<_ProgramacionRespaldos> 
         _v ??= {for (final k in _claves) k: (todo[k] as Map?)?['valor']};
         final activo = _v!['respaldo_activo'] == true;
         return Seccion(
-          titulo: 'Estrategia y programación de respaldos',
+          titulo: 'Programación automática de respaldos',
           icono: Icons.schedule_outlined,
           hijo: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Estrategia'),
@@ -280,12 +419,13 @@ class _ProgramacionRespaldosState extends ConsumerState<_ProgramacionRespaldos> 
             ),
             const SizedBox(height: 6),
             Text('Incremental y diferencial no están disponibles: Supabase (plan gratuito) no da acceso a los registros WAL; '
-                'cada respaldo es un volcado completo con pg_dump.',
+                'cada respaldo es una copia completa.',
                 style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: 12),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Respaldo automático en segundo plano'),
+              subtitle: const Text('Envía la copia a la cuenta de GitHub vinculada a la hora elegida, sin que nadie tenga que entrar.'),
               value: activo,
               onChanged: (b) => setState(() => _v!['respaldo_activo'] = b),
             ),

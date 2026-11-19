@@ -49,13 +49,19 @@ class SesionControlador extends AsyncNotifier<EstadoSesion> {
     state = AsyncData(EstadoSesion(perfil: p));
   }
 
+  /// true mientras el propio usuario sale: así el aviso de «sesión revocada» de su propio cierre se ignora.
+  bool saliendo = false;
+
   Future<void> cerrarSesion({String? mensaje}) async {
+    if (saliendo) return;
+    saliendo = true;
     try {
       await ref.read(repositorioSeguridadProvider).cerrarSesion();
     } catch (_) {
       // La sesión pudo haber sido revocada en el servidor: igual se sale localmente.
     } finally {
       state = AsyncData(EstadoSesion(mensaje: mensaje));
+      saliendo = false;
     }
   }
 

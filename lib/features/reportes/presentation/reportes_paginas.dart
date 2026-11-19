@@ -94,7 +94,7 @@ class _ReporteRendimientoPaginaState extends ConsumerState<ReporteRendimientoPag
     final v = ref.watch(_rendimientoProvider(_p));
     return Pagina(
       etiquetaRf: 'Reportes · RF-20',
-      titulo: 'Rendimiento y producción de ensilado',
+      titulo: 'Rendimiento del ensilado',
       subtitulo: 'Rollos por tonelada de grano ajustado. La alerta marca lotes fuera del rango normal del grano (control compensatorio).',
       hijos: [
         _BarraPeriodo(_p, (x) => setState(() => _p = x)),
@@ -167,7 +167,7 @@ class _ReporteExistenciasPaginaState extends ConsumerState<ReporteExistenciasPag
     final ex = ref.watch(_existenciasProvider);
     return Pagina(
       etiquetaRf: 'Reportes · RF-21',
-      titulo: 'Existencias y rotación por sede',
+      titulo: 'Existencias y rotación',
       subtitulo: 'Stock actual por sede y lote, y rotación del período (salidas ÷ stock promedio).',
       hijos: [
         Asincrono(ex, datos: (l) {
@@ -241,7 +241,7 @@ class _ReporteVentasPaginaState extends ConsumerState<ReporteVentasPagina> {
     final v = ref.watch(_ventasProvider((p: _p, cliente: _cliente)));
     return Pagina(
       etiquetaRf: 'Reportes · RF-22',
-      titulo: 'Ventas por producto y cartera',
+      titulo: 'Ventas y cartera',
       subtitulo: 'Totales del período, por producto y por cliente; cartera de notas emitidas con saldo.',
       hijos: [
         _BarraPeriodo(_p, (x) => setState(() => _p = x), extra: [
@@ -343,7 +343,7 @@ class _ReporteMermasPaginaState extends ConsumerState<ReporteMermasPagina> {
     final v = ref.watch(_mermasProvider(_p));
     return Pagina(
       etiquetaRf: 'Reportes · RF-23',
-      titulo: 'Histórico de pérdidas y merma',
+      titulo: 'Pérdidas y merma',
       subtitulo: 'Cada baja con su causa, quién la solicitó y quién la aprobó (ajuste de la revisión del Sprint 4).',
       hijos: [
         _BarraPeriodo(_p, (x) => setState(() => _p = x)),

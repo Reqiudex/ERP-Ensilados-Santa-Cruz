@@ -10,7 +10,8 @@ import 'medidor_clave.dart';
 
 final parametrosProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) => ref.watch(repositorioSeguridadProvider).parametros());
 
-/// RF-03 Políticas de contraseñas, bloqueo y concurrencia (administrador). El servidor vuelve a validar cada valor.
+/// RF-03 Políticas de contraseñas: longitud, complejidad, vigencia y bloqueo ante intentos fallidos (administrador).
+/// Inactividad, sesiones simultáneas y PIN están en RF-04 (Autenticación y sesiones). El servidor valida cada valor.
 class PoliticasPagina extends ConsumerStatefulWidget {
   const PoliticasPagina({super.key});
   @override
@@ -23,8 +24,7 @@ class _PoliticasPaginaState extends ConsumerState<PoliticasPagina> {
   final _bloqueo = TextEditingController();
 
   static const _claves = [
-    'bloqueo_minutos', 'sesiones_max', 'clave_longitud_min', 'clave_historial', 'intentos_max', 'clave_vigencia_dias',
-    'inactividad_minutos', 'clave_mayusculas', 'clave_minusculas', 'clave_numeros', 'clave_simbolos',
+    'bloqueo_minutos', 'clave_longitud_min', 'clave_historial', 'intentos_max', 'clave_vigencia_dias', 'clave_mayusculas', 'clave_minusculas', 'clave_numeros', 'clave_simbolos',
   ];
 
   int _n(String k, int defecto) => (_v?[k] as num?)?.toInt() ?? defecto;
@@ -53,8 +53,9 @@ class _PoliticasPaginaState extends ConsumerState<PoliticasPagina> {
     final tema = Theme.of(context);
     return Pagina(
       etiquetaRf: 'Seguridad y Accesos · RF-03',
-      titulo: 'Políticas de contraseñas, bloqueo y concurrencia',
-      subtitulo: 'Se aplican en el alta de usuarios, el cambio de contraseña, el restablecimiento y el ingreso; el servidor las vuelve a validar.',
+      titulo: 'Políticas de contraseñas',
+      subtitulo: 'Longitud, complejidad y vigencia de las claves, y bloqueo de la cuenta ante intentos fallidos. Se aplican en el alta, '
+          'el cambio y el restablecimiento de contraseñas y en el ingreso; el servidor las vuelve a validar.',
       hijos: [
         Asincrono(p, datos: (todo) {
           if (_v == null) {
@@ -68,7 +69,7 @@ class _PoliticasPaginaState extends ConsumerState<PoliticasPagina> {
               width: ancho ? 520 : double.infinity,
               child: Column(children: [
                 Seccion(
-                  titulo: 'Bloqueo y sesiones',
+                  titulo: 'Bloqueo por intentos fallidos',
                   icono: Icons.lock_clock_outlined,
                   hijo: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     TextField(
@@ -91,26 +92,11 @@ class _PoliticasPaginaState extends ConsumerState<PoliticasPagina> {
                         ),
                     ]),
                     const SizedBox(height: 16),
-                    _Desplegable(
+                    DesplegableNumero(
                       etiqueta: 'Intentos fallidos antes del bloqueo',
                       valor: _n('intentos_max', 3),
                       opciones: const {3: '3 intentos', 5: '5 intentos', 10: '10 intentos'},
                       alCambiar: (x) => setState(() => _v!['intentos_max'] = x),
-                    ),
-                    const SizedBox(height: 16),
-                    _Desplegable(
-                      etiqueta: 'Sesiones simultáneas por usuario',
-                      valor: _n('sesiones_max', 0),
-                      opciones: const {1: '1 dispositivo', 2: '2 dispositivos', 3: '3 dispositivos', 0: 'Ilimitado'},
-                      alCambiar: (x) => setState(() => _v!['sesiones_max'] = x),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      initialValue: '${_n('inactividad_minutos', 15)}',
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(labelText: 'Cierre por inactividad (minutos)', suffixText: 'min'),
-                      onChanged: (t) => _v!['inactividad_minutos'] = int.tryParse(t) ?? _v!['inactividad_minutos'],
                     ),
                   ]),
                 ),
@@ -128,8 +114,8 @@ class _PoliticasPaginaState extends ConsumerState<PoliticasPagina> {
                       label: '${_n('clave_longitud_min', 8)}',
                       onChanged: (x) => setState(() => _v!['clave_longitud_min'] = x.round()),
                     ),
-                    _Desplegable(
-                      etiqueta: 'Historial: no reutilizar las últimas',
+                    DesplegableNumero(
+                      etiqueta: 'Historial: no reutilizar las últimas (control adicional)',
                       valor: _n('clave_historial', 3),
                       opciones: const {3: '3 contraseñas', 5: '5 contraseñas', 10: '10 contraseñas'},
                       alCambiar: (x) => setState(() => _v!['clave_historial'] = x),
@@ -194,8 +180,8 @@ class _PoliticasPaginaState extends ConsumerState<PoliticasPagina> {
   }
 }
 
-class _Desplegable extends StatelessWidget {
-  const _Desplegable({required this.etiqueta, required this.valor, required this.opciones, required this.alCambiar});
+class DesplegableNumero extends StatelessWidget {
+  const DesplegableNumero({super.key, required this.etiqueta, required this.valor, required this.opciones, required this.alCambiar});
   final String etiqueta;
   final int valor;
   final Map<int, String> opciones;

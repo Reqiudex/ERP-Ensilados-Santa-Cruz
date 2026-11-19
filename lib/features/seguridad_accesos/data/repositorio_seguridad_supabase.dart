@@ -145,6 +145,34 @@ class RepositorioSeguridadSupabase implements RepositorioSeguridad {
   Future<int> optimizarBase() async => ((await _api.rpc('optimizar_base'))['tablas'] as num?)?.toInt() ?? 0;
 
   @override
+  Future<Map<String, dynamic>> exportarRespaldo() => _api.rpc('exportar_respaldo');
+
+  @override
+  Future<Map<String, dynamic>> estadoGithub() => _api.rpc('estado_github');
+
+  @override
+  Future<void> vincularGithub({required String repositorio, required String cuenta, required String token, String rama = 'main'}) =>
+      _api.rpc('vincular_github', {'p_repositorio': repositorio, 'p_cuenta': cuenta, 'p_token': token, 'p_rama': rama});
+
+  @override
+  Future<void> desvincularGithub() => _api.rpc('desvincular_github');
+
+  @override
+  Future<Map<String, dynamic>> enviarRespaldoGithub() async {
+    try {
+      final r = await _api.cliente.functions.invoke('respaldo-github', body: {'origen': 'manual'});
+      return Map<String, dynamic>.from(r.data as Map);
+    } on FunctionException catch (e) {
+      final d = e.details;
+      throw ErrorNegocio(d is Map && d['error'] != null ? '${d['error']}' : 'No se pudo enviar el respaldo a GitHub.',
+          prohibido: e.status == 403);
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> estadoMantenimiento() => _api.rpc('estado_mantenimiento');
+
+  @override
   Future<void> revocarSesion(String sesionId) => _api.rpc('cerrar_sesion', {'p_sesion': sesionId});
 
   @override
