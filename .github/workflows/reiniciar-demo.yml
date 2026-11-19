@@ -1,0 +1,21 @@
+name: Reiniciar datos de demostración
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmar:
+        description: 'Escriba REINICIAR para borrar lo simulado y volver a cargar el seed'
+        required: true
+
+jobs:
+  reiniciar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reiniciar y cargar el seed
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          [ "${{ inputs.confirmar }}" = "REINICIAR" ] || { echo "Confirmación incorrecta"; exit 1; }
+          docker run --rm -v "$PWD:/r" postgres:17 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f /r/supabase/reiniciar_demo.sql
+          docker run --rm -v "$PWD:/r" postgres:17 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f /r/supabase/seed.sql
