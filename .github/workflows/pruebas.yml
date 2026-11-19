@@ -1,9 +1,7 @@
 name: Pruebas CP-01 a CP-27
 
+# Se ejecuta a mano: las pruebas de caja negra crean registros en la base en línea y la demo debe quedar limpia.
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
 
 jobs:
