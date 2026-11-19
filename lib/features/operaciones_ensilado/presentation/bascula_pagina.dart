@@ -250,21 +250,24 @@ class _BasculaPaginaState extends ConsumerState<BasculaPagina> {
                 Row(children: [
                   if (_paso > 0)
                     Expanded(
+                      flex: 2,
                       child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(minimumSize: const Size(48, 60)),
+                        style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(48, 60), padding: const EdgeInsets.symmetric(horizontal: 12)),
                         onPressed: () => setState(() {
                           _paso--;
                           _error = null;
                         }),
                         icon: const Icon(Icons.arrow_back),
-                        label: const Text('Atrás', style: TextStyle(fontSize: 18)),
+                        label: const Text('Atrás', maxLines: 1, softWrap: false, style: TextStyle(fontSize: 18)),
                       ),
                     ),
                   if (_paso > 0) const SizedBox(width: 12),
                   Expanded(
-                    flex: 2,
+                    flex: 3,
                     child: FilledButton.icon(
-                      style: FilledButton.styleFrom(minimumSize: const Size(48, 60)),
+                      style: FilledButton.styleFrom(
+                          minimumSize: const Size(48, 60), padding: const EdgeInsets.symmetric(horizontal: 12)),
                       onPressed: () async {
                         final e = _validarPaso();
                         setState(() => _error = e);
