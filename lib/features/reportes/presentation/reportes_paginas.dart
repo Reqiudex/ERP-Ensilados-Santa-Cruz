@@ -12,7 +12,32 @@ import '../domain/calculos_reportes.dart';
 
 typedef Periodo = ({DateTime desde, DateTime hasta});
 
-Periodo periodoInicial() => (desde: DateTime(2026, 8, 1), hasta: DateTime.now());
+/// Inicio de los datos del sistema (primera campaña registrada).
+final inicioDatos = DateTime(2026, 8, 1);
+
+DateTime _hoy() {
+  final a = DateTime.now();
+  return DateTime(a.year, a.month, a.day);
+}
+
+Periodo periodoInicial() => (desde: inicioDatos, hasta: _hoy());
+
+bool _mismoDia(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+
+const _meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+/// Atajos: todo el período con datos y los últimos cuatro meses (el actual, hasta hoy), calculados desde la fecha actual.
+List<(String, Periodo)> opcionesPeriodo() {
+  final hoy = _hoy();
+  final l = <(String, Periodo)>[('Todo', periodoInicial())];
+  for (var i = 3; i >= 0; i--) {
+    final ini = DateTime(hoy.year, hoy.month - i, 1);
+    if (ini.isBefore(DateTime(inicioDatos.year, inicioDatos.month, 1))) continue;
+    final fin = DateTime(ini.year, ini.month + 1, 0);
+    l.add((_meses[ini.month - 1], (desde: ini, hasta: fin.isAfter(hoy) ? hoy : fin)));
+  }
+  return l;
+}
 
 /// Barra de período con selector de fechas.
 class _BarraPeriodo extends StatelessWidget {
@@ -29,12 +54,16 @@ class _BarraPeriodo extends StatelessWidget {
             label: Text('${fecha(p.desde.toIso8601String())} – ${fecha(p.hasta.toIso8601String())}'),
             onPressed: () async {
               final r = await showDateRangePicker(
-                  context: context, firstDate: DateTime(2026), lastDate: DateTime.now(), initialDateRange: DateTimeRange(start: p.desde, end: p.hasta));
+                  context: context, firstDate: inicioDatos, lastDate: _hoy(), initialDateRange: DateTimeRange(start: p.desde, end: p.hasta));
               if (r != null) alCambiar((desde: r.start, hasta: r.end));
             },
           ),
-          for (final (t, d) in [('Agosto', 8), ('Septiembre', 9), ('Octubre', 10), ('Noviembre', 11)])
-            ActionChip(label: Text(t), onPressed: () => alCambiar((desde: DateTime(2026, d, 1), hasta: DateTime(2026, d + 1, 0)))),
+          for (final o in opcionesPeriodo())
+            ChoiceChip(
+              label: Text(o.$1),
+              selected: _mismoDia(p.desde, o.$2.desde) && _mismoDia(p.hasta, o.$2.hasta),
+              onSelected: (_) => alCambiar(o.$2),
+            ),
           ...extra,
         ]),
       );
@@ -168,7 +197,9 @@ class _ReporteExistenciasPaginaState extends ConsumerState<ReporteExistenciasPag
     return Pagina(
       etiquetaRf: 'Reportes · RF-21',
       titulo: 'Existencias y rotación',
-      subtitulo: 'Stock actual por sede y lote, y rotación del período (salidas ÷ stock promedio).',
+      subtitulo: verRotacion
+          ? 'Stock actual por sede y lote, y rotación del período (salidas ÷ stock promedio).'
+          : 'Stock actual de su centro por lote. La rotación la consultan el área comercial, finanzas y la gerencia.',
       hijos: [
         Asincrono(ex, datos: (l) {
           final rollos = l.where((x) => x['tipo'] == 'rollo').toList();
@@ -308,7 +339,7 @@ class _ReporteVentasPaginaState extends ConsumerState<ReporteVentasPagina> {
             ),
             const SizedBox(height: 20),
             TablaDatos(
-              titulo: 'Cartera por cliente',
+              titulo: 'Cartera por cliente (saldo al día de hoy)',
               busqueda: false,
               filas: cartera,
               columnas: [
