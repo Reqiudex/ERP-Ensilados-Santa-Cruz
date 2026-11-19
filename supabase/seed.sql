@@ -20,7 +20,7 @@ begin
     ('a1000000-0000-4000-8000-000000000004'::uuid, 'Gabriel Zabala Mercado', '5432109', 'gerencia@ensilados.demo', 5, '11111111-1111-1111-1111-111111111111'::uuid),
     ('a1000000-0000-4000-8000-000000000021'::uuid, 'Juan Carlos Rivero', '9876543', 'sanramon@ensilados.demo', 2, '22222222-2222-2222-2222-222222222222'::uuid),
     ('a1000000-0000-4000-8000-000000000022'::uuid, 'Rosa Elena Quispe', '9988776', 'sanjulian@ensilados.demo', 2, '33333333-3333-3333-3333-333333333333'::uuid),
-    ('a1000000-0000-4000-8000-000000000023'::uuid, 'Hugo Chávez Taborga', '9123456', 'sanrafael@ensilados.demo', 2, '44444444-4444-4444-4444-444444444444'::uuid)
+    ('a1000000-0000-4000-8000-000000000023'::uuid, 'Wilfredo Montaño Saucedo', '9123456', 'sanrafael@ensilados.demo', 2, '44444444-4444-4444-4444-444444444444'::uuid)
   ) as t(id, nombre, ci, correo, rol_id, sede_id) loop
     insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
       raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token,
