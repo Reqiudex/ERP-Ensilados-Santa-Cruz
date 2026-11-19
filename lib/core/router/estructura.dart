@@ -150,8 +150,9 @@ class _Menu extends ConsumerWidget {
             Container(
               width: 42,
               height: 42,
+              padding: const EdgeInsets.all(5),
               decoration: BoxDecoration(color: Colores.primario, borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.grass, color: Colors.white),
+              child: const Image(image: AssetImage('assets/marca/logo_blanco.png')),
             ),
             const SizedBox(width: 12),
             const Expanded(
