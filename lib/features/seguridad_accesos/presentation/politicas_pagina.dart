@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/widgets/componentes.dart';
 import '../data/repositorio_seguridad_supabase.dart';
 import '../domain/reglas_seguridad.dart';
+import 'confirmar_clave.dart';
 import 'medidor_clave.dart';
 
 final parametrosProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) => ref.watch(repositorioSeguridadProvider).parametros());
 
-/// RF-03 Políticas de contraseñas (administrador).
+/// RF-03 Políticas de contraseñas, bloqueo y concurrencia (administrador). El servidor vuelve a validar cada valor.
 class PoliticasPagina extends ConsumerStatefulWidget {
   const PoliticasPagina({super.key});
   @override
@@ -18,78 +20,156 @@ class PoliticasPagina extends ConsumerStatefulWidget {
 class _PoliticasPaginaState extends ConsumerState<PoliticasPagina> {
   Map<String, dynamic>? _v;
   final _prueba = TextEditingController();
+  final _bloqueo = TextEditingController();
 
-  static const _numericos = {
-    'clave_longitud_min': 'Longitud mínima',
-    'clave_vigencia_dias': 'Vigencia (días)',
-    'intentos_max': 'Intentos fallidos antes de bloquear',
-    'bloqueo_minutos': 'Minutos de bloqueo',
-    'inactividad_minutos': 'Cierre por inactividad (minutos)',
-  };
-  static const _booleanos = {
-    'clave_mayusculas': 'Exigir mayúsculas',
-    'clave_minusculas': 'Exigir minúsculas',
-    'clave_numeros': 'Exigir números',
-    'clave_simbolos': 'Exigir símbolos',
-  };
+  static const _claves = [
+    'bloqueo_minutos', 'sesiones_max', 'clave_longitud_min', 'clave_historial', 'intentos_max', 'clave_vigencia_dias',
+    'inactividad_minutos', 'clave_mayusculas', 'clave_minusculas', 'clave_numeros', 'clave_simbolos',
+  ];
+
+  int _n(String k, int defecto) => (_v?[k] as num?)?.toInt() ?? defecto;
+
+  @override
+  void dispose() {
+    _prueba.dispose();
+    _bloqueo.dispose();
+    super.dispose();
+  }
+
+  Future<void> _guardar() async {
+    final ok = await confirmarConClave(context, ref,
+        titulo: 'Confirmar cambio de política', detalle: 'Ingrese su contraseña de administrador para aplicar la nueva política.');
+    if (!ok || !mounted) return;
+    await ejecutar(context, () async {
+      await ref.read(repositorioSeguridadProvider).guardarParametros({for (final k in _claves) k: _v![k]});
+      return true;
+    }, exito: 'Política guardada y registrada en la bitácora.');
+    ref.invalidate(parametrosProvider);
+  }
 
   @override
   Widget build(BuildContext context) {
     final p = ref.watch(parametrosProvider);
+    final tema = Theme.of(context);
     return Pagina(
       etiquetaRf: 'Seguridad y Accesos · RF-03',
-      titulo: 'Políticas de contraseñas',
-      subtitulo: 'Se aplican en el alta de usuarios, el cambio de contraseña y el restablecimiento; el servidor las vuelve a validar.',
+      titulo: 'Políticas de contraseñas, bloqueo y concurrencia',
+      subtitulo: 'Se aplican en el alta de usuarios, el cambio de contraseña, el restablecimiento y el ingreso; el servidor las vuelve a validar.',
       hijos: [
         Asincrono(p, datos: (todo) {
-          _v ??= {for (final e in todo.entries) e.key: (e.value as Map)['valor']};
+          if (_v == null) {
+            _v = {for (final e in todo.entries) e.key: (e.value as Map)['valor']};
+            _bloqueo.text = '${_n('bloqueo_minutos', 15)}';
+          }
           final pol = PoliticaClave.desdeParametros(_v!);
+          final ancho = esAncho(context);
           return Wrap(spacing: 20, runSpacing: 20, children: [
             SizedBox(
-              width: esAncho(context) ? 520 : double.infinity,
-              child: Seccion(
-                titulo: 'Parámetros',
-                icono: Icons.tune,
-                hijo: Column(children: [
-                  for (final e in _numericos.entries)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: TextFormField(
-                        initialValue: '${_v![e.key]}',
-                        decoration: InputDecoration(labelText: e.value),
-                        keyboardType: TextInputType.number,
-                        onChanged: (t) => _v![e.key] = int.tryParse(t) ?? _v![e.key],
+              width: ancho ? 520 : double.infinity,
+              child: Column(children: [
+                Seccion(
+                  titulo: 'Bloqueo y sesiones',
+                  icono: Icons.lock_clock_outlined,
+                  hijo: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    TextField(
+                      controller: _bloqueo,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(labelText: 'Desbloqueo automático (minutos)', suffixText: 'min'),
+                      onChanged: (t) => setState(() => _v!['bloqueo_minutos'] = int.tryParse(t) ?? _v!['bloqueo_minutos']),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(spacing: 8, children: [
+                      for (final m in const [15, 30, 60, 120])
+                        ChoiceChip(
+                          label: Text('${m}m'),
+                          selected: _n('bloqueo_minutos', 15) == m,
+                          onSelected: (_) => setState(() {
+                            _v!['bloqueo_minutos'] = m;
+                            _bloqueo.text = '$m';
+                          }),
+                        ),
+                    ]),
+                    const SizedBox(height: 16),
+                    _Desplegable(
+                      etiqueta: 'Intentos fallidos antes del bloqueo',
+                      valor: _n('intentos_max', 3),
+                      opciones: const {3: '3 intentos', 5: '5 intentos', 10: '10 intentos'},
+                      alCambiar: (x) => setState(() => _v!['intentos_max'] = x),
+                    ),
+                    const SizedBox(height: 16),
+                    _Desplegable(
+                      etiqueta: 'Sesiones simultáneas por usuario',
+                      valor: _n('sesiones_max', 0),
+                      opciones: const {1: '1 dispositivo', 2: '2 dispositivos', 3: '3 dispositivos', 0: 'Ilimitado'},
+                      alCambiar: (x) => setState(() => _v!['sesiones_max'] = x),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      initialValue: '${_n('inactividad_minutos', 15)}',
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(labelText: 'Cierre por inactividad (minutos)', suffixText: 'min'),
+                      onChanged: (t) => _v!['inactividad_minutos'] = int.tryParse(t) ?? _v!['inactividad_minutos'],
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 20),
+                Seccion(
+                  titulo: 'Reglas de complejidad',
+                  icono: Icons.rule,
+                  hijo: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Longitud mínima: ${_n('clave_longitud_min', 8)} caracteres', style: tema.textTheme.titleSmall),
+                    Slider(
+                      value: _n('clave_longitud_min', 8).clamp(8, 16).toDouble(),
+                      min: 8,
+                      max: 16,
+                      divisions: 8,
+                      label: '${_n('clave_longitud_min', 8)}',
+                      onChanged: (x) => setState(() => _v!['clave_longitud_min'] = x.round()),
+                    ),
+                    _Desplegable(
+                      etiqueta: 'Historial: no reutilizar las últimas',
+                      valor: _n('clave_historial', 3),
+                      opciones: const {3: '3 contraseñas', 5: '5 contraseñas', 10: '10 contraseñas'},
+                      alCambiar: (x) => setState(() => _v!['clave_historial'] = x),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      initialValue: '${_n('clave_vigencia_dias', 90)}',
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(labelText: 'Vigencia de la contraseña (días)', suffixText: 'días'),
+                      onChanged: (t) => _v!['clave_vigencia_dias'] = int.tryParse(t) ?? _v!['clave_vigencia_dias'],
+                    ),
+                    const SizedBox(height: 8),
+                    for (final e in const {
+                      'clave_mayusculas': 'Exigir mayúsculas',
+                      'clave_minusculas': 'Exigir minúsculas',
+                      'clave_numeros': 'Exigir números',
+                      'clave_simbolos': 'Exigir caracteres especiales (@#\$%&*)',
+                    }.entries)
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(e.value),
+                        value: _v![e.key] == true,
+                        onChanged: (b) => setState(() => _v![e.key] = b),
+                      ),
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton.icon(
+                        icon: const Icon(Icons.save_outlined),
+                        label: const Text('Guardar política'),
+                        onPressed: _guardar,
                       ),
                     ),
-                  for (final e in _booleanos.entries)
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(e.value),
-                      value: _v![e.key] == true,
-                      onChanged: (b) => setState(() => _v![e.key] = b),
-                    ),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton.icon(
-                      icon: const Icon(Icons.save_outlined),
-                      label: const Text('Guardar política'),
-                      onPressed: () async {
-                        await ejecutar(context, () async {
-                          await ref.read(repositorioSeguridadProvider).guardarParametros({
-                            for (final k in [..._numericos.keys, ..._booleanos.keys]) k: _v![k],
-                          });
-                          return true;
-                        }, exito: 'Política guardada y registrada en la bitácora.');
-                        ref.invalidate(parametrosProvider);
-                      },
-                    ),
-                  ),
-                ]),
-              ),
+                  ]),
+                ),
+              ]),
             ),
             SizedBox(
-              width: esAncho(context) ? 420 : double.infinity,
+              width: ancho ? 420 : double.infinity,
               child: Seccion(
                 titulo: 'Evaluador de contraseñas',
                 icono: Icons.password,
@@ -102,8 +182,8 @@ class _PoliticasPaginaState extends ConsumerState<PoliticasPagina> {
                   const SizedBox(height: 10),
                   MedidorClave(clave: _prueba.text, politica: pol),
                   const SizedBox(height: 16),
-                  const Aviso('Supabase Auth también exige longitud mínima de 8 caracteres. Las contraseñas se guardan con bcrypt; '
-                      'nunca se muestran ni se registran en la bitácora.'),
+                  const Aviso('Las contraseñas se guardan con bcrypt (sal propia por contraseña); nunca se muestran ni se registran '
+                      'en la bitácora. El historial guarda solo los hashes anteriores.'),
                 ]),
               ),
             ),
@@ -112,4 +192,20 @@ class _PoliticasPaginaState extends ConsumerState<PoliticasPagina> {
       ],
     );
   }
+}
+
+class _Desplegable extends StatelessWidget {
+  const _Desplegable({required this.etiqueta, required this.valor, required this.opciones, required this.alCambiar});
+  final String etiqueta;
+  final int valor;
+  final Map<int, String> opciones;
+  final ValueChanged<int> alCambiar;
+  @override
+  Widget build(BuildContext context) => DropdownButtonFormField<int>(
+        initialValue: opciones.containsKey(valor) ? valor : null,
+        isExpanded: true,
+        decoration: InputDecoration(labelText: etiqueta),
+        items: [for (final e in opciones.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
+        onChanged: (x) => x == null ? null : alCambiar(x),
+      );
 }

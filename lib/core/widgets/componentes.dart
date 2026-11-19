@@ -332,19 +332,28 @@ class _TablaDatosState extends State<TablaDatos> {
           child: DataTable(
             showCheckboxColumn: false,
             columnSpacing: 20,
+            // Estándar de tablas: altura fija por fila y celdas alineadas a la izquierda.
+            dataRowMinHeight: 48,
+            dataRowMaxHeight: 48,
             columns: [
-              ...widget.columnas.map((c) => DataColumn(label: Text(c.titulo), numeric: c.numerica)),
+              ...widget.columnas.map((c) => DataColumn(label: Text(c.titulo))),
               if (widget.acciones != null) const DataColumn(label: Text('Acciones')),
             ],
             rows: visibles
                 .map((f) => DataRow(
                       onSelectChanged: widget.alTocar == null ? null : (_) => widget.alTocar!(f),
                       cells: [
-                        ...widget.columnas.map((c) => DataCell(c.celda?.call(f) ??
-                            ConstrainedBox(
-                                constraints: BoxConstraints(maxWidth: c.ancho ?? 260),
-                                child: Text(c.valor(f), overflow: TextOverflow.ellipsis, maxLines: 2)))),
-                        if (widget.acciones != null) DataCell(Row(mainAxisSize: MainAxisSize.min, children: widget.acciones!(f))),
+                        ...widget.columnas.map((c) => DataCell(Align(
+                            alignment: Alignment.centerLeft,
+                            child: c.celda?.call(f) ??
+                                ConstrainedBox(
+                                    constraints: BoxConstraints(maxWidth: c.ancho ?? 260),
+                                    child: Tooltip(
+                                        message: c.valor(f),
+                                        waitDuration: const Duration(milliseconds: 600),
+                                        child: Text(c.valor(f), overflow: TextOverflow.ellipsis, maxLines: 1)))))),
+                        if (widget.acciones != null)
+                          DataCell(Align(alignment: Alignment.centerLeft, child: Row(mainAxisSize: MainAxisSize.min, children: widget.acciones!(f)))),
                       ],
                     ))
                 .toList(),

@@ -13,6 +13,8 @@ class MatrizPagina extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mio = ref.watch(perfilProvider)?.rol;
+    // El superadministrador solo aparece para otro superadministrador.
+    final roles = mio == Rol.superadmin ? Rol.values : Rol.deLaMatriz;
     Color color(Acceso a) => switch (a) {
           Acceso.r => Colores.primario,
           Acceso.s => Colores.info,
@@ -34,16 +36,48 @@ class MatrizPagina extends ConsumerWidget {
             ),
         ]),
         const SizedBox(height: 16),
+        Seccion(
+          titulo: 'Roles del sistema',
+          icono: Icons.badge_outlined,
+          hijo: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columnSpacing: 18,
+              dataRowMinHeight: 48,
+              dataRowMaxHeight: 48,
+              columns: const [
+                DataColumn(label: Text('Rol')),
+                DataColumn(label: Text('Descripción operativa')),
+                DataColumn(label: Text('Lectura')),
+                DataColumn(label: Text('Escritura')),
+                DataColumn(label: Text('Eliminación')),
+              ],
+              rows: [
+                for (final r in roles)
+                  DataRow(color: WidgetStatePropertyAll(r == mio ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: .35) : null), cells: [
+                    _celda(r.nombre, 180, negrita: true),
+                    _celda(descripcionRol(r), 320),
+                    _celda(modulosDeRol(r, escritura: false).join(', '), 240),
+                    _celda(modulosDeRol(r, escritura: true).join(', '), 240),
+                    _celda('Ninguno: las bajas son lógicas', 200),
+                  ]),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
         if (mio != null) Aviso('Su rol: ${mio.nombre}. Su columna aparece resaltada.'),
         Card(
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: DataTable(
               columnSpacing: 18,
+              dataRowMinHeight: 48,
+              dataRowMaxHeight: 48,
               columns: [
                 const DataColumn(label: Text('Módulo')),
                 const DataColumn(label: Text('Operación')),
-                for (final r in Rol.deLaMatriz)
+                for (final r in roles)
                   DataColumn(
                       label: SizedBox(
                           width: 96,
@@ -56,11 +90,14 @@ class MatrizPagina extends ConsumerWidget {
                   DataRow(cells: [
                     DataCell(Text(o.modulo, style: const TextStyle(color: Colores.textoSuave))),
                     DataCell(SizedBox(width: 260, child: Text(o.operacion))),
-                    for (final r in Rol.deLaMatriz)
+                    for (final r in roles)
                       DataCell(Container(
                         color: r == mio ? Colores.primarioClaro.withValues(alpha: .25) : null,
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                        child: (o.accesos[r] ?? const []).isEmpty
+                        alignment: Alignment.centerLeft,
+                        child: r == Rol.superadmin
+                            ? const Text('Total')
+                            : (o.accesos[r] ?? const []).isEmpty
                             ? const Text('—', style: TextStyle(color: Colores.borde))
                             : Wrap(spacing: 4, children: [
                                 for (final a in o.accesos[r]!)
@@ -108,3 +145,14 @@ class _Regla extends StatelessWidget {
         ]),
       );
 }
+
+DataCell _celda(String t, double ancho, {bool negrita = false}) => DataCell(Align(
+      alignment: Alignment.centerLeft,
+      child: SizedBox(
+        width: ancho,
+        child: Tooltip(
+          message: t,
+          child: Text(t, maxLines: 1, overflow: TextOverflow.ellipsis, style: negrita ? const TextStyle(fontWeight: FontWeight.w700) : null),
+        ),
+      ),
+    ));

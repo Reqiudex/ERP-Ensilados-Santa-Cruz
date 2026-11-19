@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -90,6 +88,8 @@ class _BitacoraPaginaState extends ConsumerState<BitacoraPagina> {
       subtitulo: 'Registro automático e inalterable (sin UPDATE ni DELETE para ningún rol). CI y correos se muestran enmascarados.',
       alRefrescar: () async => ref.invalidate(bitacoraProvider(_f)),
       hijos: [
+        const _BannerWorm(),
+        const SizedBox(height: 12),
         Asincrono(v, datos: (l) => TablaDatos(
               titulo: 'Eventos',
               csv: true,
@@ -116,24 +116,105 @@ class _BitacoraPaginaState extends ConsumerState<BitacoraPagina> {
                 Columna('IP', (e) => '${e['ip'] ?? '—'}'),
                 Columna('Cambio', _cambio, ancho: 380),
               ],
-              alTocar: (e) => showDialog(
-                context: context,
-                builder: (c) => AlertDialog(
-                  title: Text('Evento N.º ${e['id']}'),
-                  content: SizedBox(
-                    width: 560,
-                    child: SingleChildScrollView(
-                      child: SelectableText(const JsonEncoder.withIndent('  ').convert({
-                        'antes': enmascararDatos(e['datos_antes']),
-                        'despues': enmascararDatos(e['datos_despues']),
-                      })),
-                    ),
-                  ),
-                  actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cerrar'))],
-                ),
-              ),
+              alTocar: (e) => showDialog(context: context, builder: (_) => InspectorCambios(evento: e, accion: _acciones[e['accion']] ?? '${e['accion']}')),
             )),
       ],
+    );
+  }
+}
+
+/// Aviso de inmutabilidad: la bitácora es de escritura única y lectura múltiple (WORM).
+class _BannerWorm extends StatelessWidget {
+  const _BannerWorm();
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: c.secondaryContainer, borderRadius: BorderRadius.circular(12)),
+      child: Row(children: [
+        Icon(Icons.lock_outline, color: c.onSecondaryContainer),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            'Registros inmutables (WORM: se escriben una vez y solo se leen). La base de datos rechaza cualquier UPDATE o DELETE '
+            'sobre la bitácora, para todos los roles.',
+            style: TextStyle(color: c.onSecondaryContainer),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+/// Inspector de cambios: compara lado a lado el valor anterior (rojo) y el nuevo (verde) de cada campo.
+class InspectorCambios extends StatelessWidget {
+  const InspectorCambios({super.key, required this.evento, required this.accion});
+  final Fila evento;
+  final String accion;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).colorScheme;
+    final antes = enmascararDatos(evento['datos_antes']);
+    final despues = enmascararDatos(evento['datos_despues']);
+    final ma = antes is Map ? antes : const {};
+    final md = despues is Map ? despues : const {};
+    final claves = {...ma.keys, ...md.keys}.map((k) => '$k').toList()..sort();
+    final ancho = esAncho(context);
+
+    Widget columna(String titulo, Map datos, Color fondo, Color texto, IconData icono) => Expanded(
+          child: Container(
+            decoration: BoxDecoration(color: fondo, borderRadius: BorderRadius.circular(10)),
+            padding: const EdgeInsets.all(12),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Icon(icono, size: 18, color: texto),
+                const SizedBox(width: 6),
+                Text(titulo, style: TextStyle(color: texto, fontWeight: FontWeight.w700)),
+              ]),
+              const SizedBox(height: 8),
+              if (datos.isEmpty) Text('(sin datos)', style: TextStyle(color: texto)),
+              for (final k in claves)
+                if (datos.containsKey(k))
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: SelectableText.rich(TextSpan(children: [
+                      TextSpan(text: '$k: ', style: TextStyle(color: texto, fontWeight: FontWeight.w600)),
+                      TextSpan(
+                        text: '${datos[k]}',
+                        style: TextStyle(
+                          color: texto,
+                          backgroundColor: '${ma[k]}' != '${md[k]}' ? texto.withValues(alpha: .12) : null,
+                        ),
+                      ),
+                    ])),
+                  ),
+            ]),
+          ),
+        );
+
+    final cuerpo = [
+      columna('Antes', ma, c.errorContainer, c.onErrorContainer, Icons.remove_circle_outline),
+      SizedBox(width: ancho ? 12 : 0, height: ancho ? 0 : 12),
+      columna('Después', md, c.primaryContainer, c.onPrimaryContainer, Icons.add_circle_outline),
+    ];
+    return AlertDialog(
+      title: Text('Evento N.º ${evento['id']} · $accion'),
+      content: SizedBox(
+        width: 820,
+        child: SingleChildScrollView(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('${evento['tabla']} · ${fechaHora(evento['fecha_servidor'])} · '
+                '${evento['usuario']?['nombre_completo'] ?? 'Sistema / anónimo'}'),
+            const SizedBox(height: 12),
+            ancho
+                ? IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: cuerpo))
+                : Column(children: [for (final w in cuerpo) w is Expanded ? w.child : w]),
+          ]),
+        ),
+      ),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar'))],
     );
   }
 }

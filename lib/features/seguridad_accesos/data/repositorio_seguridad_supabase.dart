@@ -5,6 +5,7 @@ import '../../../core/errores/errores.dart';
 import '../../../core/supabase/api.dart';
 import '../domain/perfil.dart';
 import '../domain/repositorio_seguridad.dart';
+import '../domain/servicio_seguridad.dart';
 
 class RepositorioSeguridadSupabase implements RepositorioSeguridad {
   RepositorioSeguridadSupabase(this._api);
@@ -139,6 +140,31 @@ class RepositorioSeguridadSupabase implements RepositorioSeguridad {
 
   @override
   Future<void> pedirRespaldo() => _api.rpc('pedir_respaldo');
+
+  @override
+  Future<int> optimizarBase() async => ((await _api.rpc('optimizar_base'))['tablas'] as num?)?.toInt() ?? 0;
+
+  @override
+  Future<void> revocarSesion(String sesionId) => _api.rpc('cerrar_sesion', {'p_sesion': sesionId});
+
+  @override
+  Future<bool> sesionVigente() async => (await _api.rpc('sesion_vigente'))['valor'] == true;
+
+  @override
+  Future<bool> verificarMiClave(String clave) async => (await _api.rpc('verificar_mi_clave', {'p_clave': clave}))['valor'] == true;
+
+  @override
+  Future<List<String>> duplicadosUsuario(String nombre, String ci, String correo, {String? excluir}) async {
+    final r = await _api.rpc('verificar_duplicados_usuario',
+        {'p_nombre': nombre, 'p_ci': ci, 'p_correo': correo, 'p_excluir': excluir});
+    return [for (final x in (r['duplicados'] as List? ?? const [])) '$x'];
+  }
+
+  @override
+  Future<void> modificarEvento(int id, Registro datos) async => ServicioSeguridad().guardiaWorm('UPDATE');
+
+  @override
+  Future<void> eliminarEvento(int id) async => ServicioSeguridad().guardiaWorm('DELETE');
 
   @override
   Future<void> solicitarRestauracion(String respaldo, String motivo) =>

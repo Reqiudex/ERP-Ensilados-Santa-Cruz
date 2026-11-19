@@ -1,4 +1,7 @@
 import 'perfil.dart';
+import 'servicio_seguridad.dart';
+
+export 'servicio_seguridad.dart' show OperacionNoPermitida;
 
 typedef Registro = Map<String, dynamic>;
 
@@ -12,6 +15,15 @@ abstract interface class RepositorioSeguridad {
   Future<List<Registro>> sesionesActivas();
   Future<int> cerrarSesiones(String? usuarioId);
 
+  /// Revoca una sesión concreta («matar sesión»): el servidor la rechaza en el mismo instante.
+  Future<void> revocarSesion(String sesionId);
+
+  /// Indica si la sesión de este dispositivo sigue vigente (no fue revocada).
+  Future<bool> sesionVigente();
+
+  /// Confirma la contraseña del usuario actual antes de una acción sensible.
+  Future<bool> verificarMiClave(String clave);
+
   // RF-01 Gestión de usuarios
   Future<List<Registro>> usuarios();
   Future<List<Registro>> sedes();
@@ -22,6 +34,9 @@ abstract interface class RepositorioSeguridad {
   Future<Registro> editarUsuario(String id, Registro datos);
   Future<void> cambiarEstadoUsuario(String id, String accion);
   Future<void> restablecerClave(String id, String clave);
+
+  /// Campos que ya existen en otra cuenta: 'nombre', 'ci' o 'correo'.
+  Future<List<String>> duplicadosUsuario(String nombre, String ci, String correo, {String? excluir});
 
   // RF-02 Aprobaciones
   Future<List<Registro>> bandeja(String estado);
@@ -36,7 +51,12 @@ abstract interface class RepositorioSeguridad {
   Future<List<Registro>> respaldos();
   Future<void> pedirRespaldo();
   Future<void> solicitarRestauracion(String respaldo, String motivo);
+  Future<int> optimizarBase();
 
   // RF-05 Bitácora
   Future<List<Registro>> bitacora({DateTime? desde, DateTime? hasta, String? accion, String? tabla, String? usuarioId});
+
+  /// Guardia WORM: la bitácora no se modifica ni se borra; ambas operaciones lanzan [OperacionNoPermitida].
+  Future<void> modificarEvento(int id, Registro datos);
+  Future<void> eliminarEvento(int id);
 }

@@ -52,7 +52,8 @@ update auth.users set banned_until = null,
  where id::text like 'a1000000-0000-4000-8000-0000000000__' and id::text not like '%99';
 update auth.users set banned_until = 'infinity' where id::text not like 'a1000000-0000-4000-8000-0000000000__'
    and id in (select id from public.usuarios);
-delete from auth.sessions;
+delete from auth.sessions where user_id::text not like '%99';
+delete from app.historial_claves where usuario_id::text like 'a1000000-0000-4000-8000-0000000000__' and usuario_id::text not like '%99';
 
 update app.parametros set valor = v.valor from (values
   ('tolerancia_despacho_pct', '5'::jsonb), ('peso_promedio_rollo_kg', '850'), ('inactividad_minutos', '15'), ('clave_longitud_min', '8'),

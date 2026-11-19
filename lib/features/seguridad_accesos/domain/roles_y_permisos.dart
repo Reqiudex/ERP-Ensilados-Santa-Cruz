@@ -158,3 +158,24 @@ enum Accion {
   final Set<Rol> roles;
   bool permitida(Rol? rol) => rol == Rol.superadmin || (rol != null && roles.contains(rol));
 }
+
+/// Descripción operativa de cada rol (sección 3.1 de la tesis).
+String descripcionRol(Rol r) => switch (r) {
+      Rol.adminSistema => 'Administra cuentas, contraseñas, sesiones, respaldos y parámetros; sin permisos de negocio.',
+      Rol.operadorCentro => 'Registra báscula, órdenes, insumos, fermentación, guías y despachos de su centro.',
+      Rol.ejecutivoComercial => 'Clientes, proveedores, compras, cotizaciones, pedidos y notas de venta.',
+      Rol.cajeroContador => 'Registra cobros y pagos; consulta ventas, compras y cartera.',
+      Rol.gerenteGeneral => 'Aprueba solicitudes y consulta todos los módulos y reportes.',
+      Rol.superadmin => 'Acceso total a todos los módulos y sedes.',
+    };
+
+/// Módulos en los que el rol consulta (C, V) o escribe (R, S, A) según la matriz de permisos.
+List<String> modulosDeRol(Rol r, {required bool escritura}) {
+  if (r == Rol.superadmin) return const ['Todos'];
+  final letras = escritura ? const {Acceso.r, Acceso.s, Acceso.a} : const {Acceso.c, Acceso.v, Acceso.r, Acceso.s, Acceso.a};
+  final m = <String>{
+    for (final o in matrizPermisos)
+      if ((o.accesos[r] ?? const []).any(letras.contains)) o.modulo,
+  };
+  return m.isEmpty ? const ['—'] : m.toList();
+}

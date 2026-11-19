@@ -29,11 +29,15 @@ class Estructura extends ConsumerStatefulWidget {
 class _EstructuraState extends ConsumerState<Estructura> {
   DateTime _ultimaActividad = DateTime.now();
   Timer? _reloj;
+  Timer? _vigilancia;
+  bool _revisando = false;
 
   @override
   void initState() {
     super.initState();
     _reloj = Timer.periodic(const Duration(seconds: 20), (_) => _revisarInactividad());
+    // Sesión revocada por el administrador («matar sesión»): se expulsa al ingreso en segundos.
+    _vigilancia = Timer.periodic(const Duration(seconds: 8), (_) => _revisarRevocacion());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final p = ref.read(perfilProvider);
       if (p?.rol == Rol.operadorCentro) {
@@ -46,10 +50,30 @@ class _EstructuraState extends ConsumerState<Estructura> {
   @override
   void dispose() {
     _reloj?.cancel();
+    _vigilancia?.cancel();
     super.dispose();
   }
 
   void _actividad([_]) => _ultimaActividad = DateTime.now();
+
+  Future<void> _revisarRevocacion() async {
+    if (_revisando || ref.read(perfilProvider) == null || !ref.read(enLineaProvider)) return;
+    _revisando = true;
+    try {
+      final vigente = await ref.read(repositorioSeguridadProvider).sesionVigente();
+      if (!vigente && mounted) {
+        try {
+          await ref.read(sesionProvider.notifier).cerrarSesion(mensaje: 'Un administrador cerró su sesión. Vuelva a ingresar.');
+        } catch (_) {
+          ref.invalidate(sesionProvider);
+        }
+      }
+    } catch (_) {
+      // Sin red o error transitorio: se vuelve a revisar en el siguiente ciclo.
+    } finally {
+      _revisando = false;
+    }
+  }
 
   void _revisarInactividad() {
     final p = ref.read(perfilProvider);
@@ -85,7 +109,10 @@ class _EstructuraState extends ConsumerState<Estructura> {
       child: Focus(onKeyEvent: (_, _) {
         _actividad();
         return KeyEventResult.ignored;
-      }, child: widget.hijo),
+      }, child: Column(children: [
+        _PestanasModulo(ruta: widget.ruta, rol: perfil.rol),
+        Expanded(child: widget.hijo),
+      ])),
     );
 
     final barra = AppBar(
@@ -326,6 +353,47 @@ class _SelectorSede extends ConsumerWidget {
           if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
         }
       },
+    );
+  }
+}
+
+
+/// Pestañas horizontales con los submódulos del módulo actual que el rol puede usar (navegación interna del módulo).
+class _PestanasModulo extends StatelessWidget {
+  const _PestanasModulo({required this.ruta, required this.rol});
+  final String ruta;
+  final Rol rol;
+
+  @override
+  Widget build(BuildContext context) {
+    ModuloMenu? modulo;
+    for (final m in modulosMenu) {
+      if (m.entradas.any((e) => ruta.startsWith(e.ruta))) modulo = m;
+    }
+    if (modulo == null) return const SizedBox.shrink();
+    final entradas = modulo.entradas.where((e) => e.permitido(rol)).toList();
+    final indice = entradas.indexWhere((e) => ruta.startsWith(e.ruta));
+    if (entradas.length < 2 || indice < 0) return const SizedBox.shrink();
+    final tema = Theme.of(context);
+    return Material(
+      color: tema.colorScheme.surface,
+      child: DefaultTabController(
+        key: ValueKey('${modulo.titulo}-$indice-${entradas.length}'),
+        length: entradas.length,
+        initialIndex: indice,
+        child: TabBar(
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          onTap: (i) => context.go(entradas[i].ruta),
+          tabs: [
+            for (final e in entradas) Tab(height: 44, icon: null, child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(e.icono, size: 18),
+              const SizedBox(width: 8),
+              Text(e.nombre),
+            ])),
+          ],
+        ),
+      ),
     );
   }
 }

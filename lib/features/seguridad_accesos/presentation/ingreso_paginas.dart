@@ -7,6 +7,7 @@ import '../../../core/errores/errores.dart';
 import '../../../core/tema/tema.dart';
 import '../../../core/widgets/componentes.dart';
 import '../data/pin_local.dart';
+import '../domain/servicio_seguridad.dart';
 import '../domain/reglas_seguridad.dart';
 import 'medidor_clave.dart';
 import 'sesion.dart';
@@ -95,18 +96,29 @@ class _IngresoPaginaState extends ConsumerState<IngresoPagina> {
   bool _ocupado = false;
   bool _ver = false;
   String? _error;
+  static final _seguridad = ServicioSeguridad();
 
   Future<void> _entrar() async {
     if (!_form.currentState!.validate()) return;
+    final id = _seguridad.sanitizar(_id.text, maximo: 160);
+    // Límite de intentos en el dispositivo (el servidor aplica el mismo límite por usuario y por IP).
+    final espera = _seguridad.minutosDeEspera(id, intentosMaximos: 3, minutosBloqueo: 15);
+    if (espera > 0) {
+      setState(() => _error = 'Demasiados intentos fallidos. Espere $espera minutos antes de volver a intentar.');
+      return;
+    }
     setState(() {
       _ocupado = true;
       _error = null;
     });
     try {
-      await ref.read(sesionProvider.notifier).iniciarSesion(_id.text, _clave.text);
+      await ref.read(sesionProvider.notifier).iniciarSesion(id, _clave.text);
+      _seguridad.limpiarFallos(id);
     } on ErrorNegocio catch (e) {
+      if (e.codigo != 'red') _seguridad.registrarFallo(id);
       setState(() => _error = e.mensaje);
     } catch (e) {
+      _seguridad.registrarFallo(id);
       setState(() => _error = traducirError(e).mensaje);
     } finally {
       if (mounted) setState(() => _ocupado = false);
