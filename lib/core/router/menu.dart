@@ -12,7 +12,7 @@ class EntradaMenu {
   final Set<Rol>? roles;
 
   String get nombre => titulo ?? submodulo.titulo;
-  bool permitido(Rol? rol) => rol != null && (roles?.contains(rol) ?? submodulo.permitido(rol));
+  bool permitido(Rol? rol) => rol == Rol.superadmin || (rol != null && (roles?.contains(rol) ?? submodulo.permitido(rol)));
 }
 
 class ModuloMenu {

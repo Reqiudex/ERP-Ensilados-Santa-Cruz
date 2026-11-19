@@ -36,7 +36,7 @@ class DespachosPagina extends ConsumerWidget {
       },
       hijos: [
         if (operador && !enLinea) const Aviso('Los despachos requieren conexión.', tipo: 'alerta'),
-        if (operador || perfil.rol == Rol.gerenteGeneral)
+        if (operador || perfil.rol.comoGerente)
           Asincrono(ref.watch(despachosPendientesProvider), datos: (l) {
             if (l.isEmpty) return const MensajeVacio(titulo: 'No hay notas de venta por despachar en su centro.', icono: Icons.fire_truck_outlined);
             return Wrap(spacing: 12, runSpacing: 12, children: [
@@ -93,7 +93,7 @@ class DespachosPagina extends ConsumerWidget {
                     Columna('Receptor', (d) => '${d['receptor']}'),
                   ],
                   acciones: (d) => [
-                    if (d['peso_bascula_publica'] == null && (operador || perfil.rol == Rol.ejecutivoComercial))
+                    if (d['peso_bascula_publica'] == null && (operador || perfil.rol == Rol.ejecutivoComercial || perfil.rol == Rol.superadmin))
                       TextButton(
                         onPressed: () async {
                           final t = await pedirTexto(context, 'Peso reportado por el cliente (báscula pública)', etiqueta: 'Peso en kg', minimo: 2);

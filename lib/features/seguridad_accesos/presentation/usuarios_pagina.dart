@@ -30,6 +30,8 @@ class _UsuariosPaginaState extends ConsumerState<UsuariosPagina> {
   Widget build(BuildContext context) {
     final perfil = ref.watch(perfilProvider)!;
     final puede = Accion.crearUsuario.permitida(perfil.rol);
+    // El rol de superadministrador solo lo ve otro superadministrador.
+    final rolesVisibles = perfil.rol == Rol.superadmin ? Rol.values : Rol.deLaMatriz;
     final usuarios = ref.watch(usuariosProvider);
     final sedes = ref.watch(sedesProvider).value ?? const [];
     return Pagina(
@@ -61,7 +63,7 @@ class _UsuariosPaginaState extends ConsumerState<UsuariosPagina> {
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: Wrap(spacing: 8, runSpacing: 8, children: [
-                for (final r in Rol.values)
+                for (final r in rolesVisibles)
                   Chip(
                     avatar: CircleAvatar(
                         backgroundColor: Colores.primarioClaro,
@@ -74,7 +76,7 @@ class _UsuariosPaginaState extends ConsumerState<UsuariosPagina> {
               titulo: 'Cuentas',
               filas: filtrados,
               filtros: [
-                _Filtro('Rol', _rol, {for (final r in Rol.values) r.codigo: r.nombre}, (v) => setState(() => _rol = v)),
+                _Filtro('Rol', _rol, {for (final r in rolesVisibles) r.codigo: r.nombre}, (v) => setState(() => _rol = v)),
                 _Filtro('Sede', _sede, {for (final s in sedes) '${s['id']}': '${s['nombre']}'}, (v) => setState(() => _sede = v)),
                 _Filtro('Estado', _estado, const {'activo': 'Activo', 'suspendido': 'Suspendido', 'bloqueado': 'Bloqueado'},
                     (v) => setState(() => _estado = v)),
@@ -190,7 +192,7 @@ class _UsuariosPaginaState extends ConsumerState<UsuariosPagina> {
             initialValue: rol,
             decoration: const InputDecoration(labelText: 'Rol'),
             items: [
-              for (final r in Rol.values)
+              for (final r in Rol.deLaMatriz)
                 DropdownMenuItem(value: r.codigo, enabled: !propio, child: Text(r.privilegiado ? '${r.nombre} (requiere aprobación)' : r.nombre)),
             ],
             onChanged: propio ? null : (v) => set(() => rol = v),

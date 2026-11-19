@@ -77,6 +77,9 @@ class RepositorioSeguridadSupabase implements RepositorioSeguridad {
   Future<List<Registro>> sedes() => _api.consultar('sedes', 'id, nombre, tipo, municipio, provincia, activa', orden: 'nombre', asc: true);
 
   @override
+  Future<void> cambiarSedeTrabajo(String sedeId) => _api.rpc('cambiar_sede_trabajo', {'p_sede': sedeId});
+
+  @override
   Future<Registro> crearUsuario(Registro d) => _api.rpc('crear_usuario', {
         'p_nombre': d['nombre'],
         'p_ci': d['ci'],
