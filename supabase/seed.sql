@@ -15,9 +15,9 @@ declare
 begin
   for u in select * from (values
     ('a1000000-0000-4000-8000-000000000001'::uuid, 'Carla Méndez Rojas', '6543210', 'admin@ensilados.demo', 1, '11111111-1111-1111-1111-111111111111'::uuid),
-    ('a1000000-0000-4000-8000-000000000002'::uuid, 'Rodrigo Suárez Vaca', '7654321', 'ventas@ensilados.demo', 3, '11111111-1111-1111-1111-111111111111'::uuid),
-    ('a1000000-0000-4000-8000-000000000003'::uuid, 'Patricia Flores Añez', '8765432', 'caja@ensilados.demo', 4, '11111111-1111-1111-1111-111111111111'::uuid),
-    ('a1000000-0000-4000-8000-000000000004'::uuid, 'Marcelo Justiniano Peña', '5432109', 'gerencia@ensilados.demo', 5, '11111111-1111-1111-1111-111111111111'::uuid),
+    ('a1000000-0000-4000-8000-000000000002'::uuid, 'David Zabala Mercado', '7654321', 'ventas@ensilados.demo', 3, '11111111-1111-1111-1111-111111111111'::uuid),
+    ('a1000000-0000-4000-8000-000000000003'::uuid, 'Melvi Pedraza', '8765432', 'caja@ensilados.demo', 4, '11111111-1111-1111-1111-111111111111'::uuid),
+    ('a1000000-0000-4000-8000-000000000004'::uuid, 'Gabriel Zabala Mercado', '5432109', 'gerencia@ensilados.demo', 5, '11111111-1111-1111-1111-111111111111'::uuid),
     ('a1000000-0000-4000-8000-000000000021'::uuid, 'Juan Carlos Rivero', '9876543', 'sanramon@ensilados.demo', 2, '22222222-2222-2222-2222-222222222222'::uuid),
     ('a1000000-0000-4000-8000-000000000022'::uuid, 'Rosa Elena Quispe', '9988776', 'sanjulian@ensilados.demo', 2, '33333333-3333-3333-3333-333333333333'::uuid),
     ('a1000000-0000-4000-8000-000000000023'::uuid, 'Hugo Chávez Taborga', '9123456', 'sanrafael@ensilados.demo', 2, '44444444-4444-4444-4444-444444444444'::uuid)
@@ -37,7 +37,9 @@ begin
     on conflict (provider_id, provider) do nothing;
     insert into public.usuarios (id, nombre_completo, ci, correo, rol_id, sede_id, estado)
     values (u.id, u.nombre, u.ci, u.correo, u.rol_id, u.sede_id, 'activo')
-    on conflict (id) do nothing;
+    on conflict (id) do update set nombre_completo = excluded.nombre_completo;
+    update auth.users set raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || jsonb_build_object('nombre', u.nombre)
+     where id = u.id;
   end loop;
 end $$;
 
