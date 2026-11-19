@@ -102,7 +102,7 @@ class MatrizPagina extends ConsumerWidget {
           titulo: 'Reglas de separación de funciones',
           icono: Icons.gavel_outlined,
           hijo: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _Regla('Nadie aprueba lo que registró (CHECK aprobado_por <> registrado_por).'),
+            _Regla('Nadie aprueba lo que registró: la base de datos exige aprobado_por distinto de registrado_por.'),
             _Regla('Quien vende no cobra: solo el cajero registra cobros y pagos.'),
             _Regla('Un pesaje confirmado no se edita: se pide una corrección que aprueba el gerente.'),
             _Regla('Las guías las confirma un operador de otro centro (receptor <> emisor).'),

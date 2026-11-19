@@ -100,7 +100,12 @@ class TarjetaDato extends StatelessWidget {
                 Expanded(child: Text(titulo, style: const TextStyle(color: Colores.textoSuave, fontSize: 13))),
               ]),
               const SizedBox(height: 12),
-              Text(valor, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: c)),
+              // Una sola línea: si no cabe se achica (una fecha o un importe nunca se parte por la mitad).
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(valor, maxLines: 1, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: c)),
+              ),
               if (detalle != null) Text(detalle!, style: const TextStyle(fontSize: 12, color: Colores.textoSuave)),
             ]),
           ),

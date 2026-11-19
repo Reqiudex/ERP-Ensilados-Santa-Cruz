@@ -88,10 +88,8 @@ class RepositorioComercialSupabase implements RepositorioComercial {
   Future<List<Registro>> despachosPendientes() => _api.rpcLista('despachos_pendientes');
 
   @override
-  Future<List<Registro>> despachos() => _api.consultar('despachos',
-      'id, cantidad, peso_vendido, tolerancia_pct, peso_despachado, peso_bascula_publica, placa, receptor, fecha_registro, '
-      'lotes(codigo), sedes(nombre), notas_venta(numero), despacho_rollos(numero_rollo, peso)',
-      orden: 'fecha_registro', limite: 200);
+  // Función del servidor: el operador ve el número de nota de sus despachos sin leer los datos comerciales de la nota.
+  Future<List<Registro>> despachos() => _api.rpcLista('despachos_registrados');
 
   @override
   Future<Registro> registrarDespacho(String notaId, String loteId, List<double> pesos, String placa, String receptor, double? pesoBascula) =>

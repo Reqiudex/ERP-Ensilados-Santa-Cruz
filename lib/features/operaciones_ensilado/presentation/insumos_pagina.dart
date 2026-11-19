@@ -111,8 +111,8 @@ class _InsumosPaginaState extends ConsumerState<InsumosPagina> {
                   busqueda: false,
                   filas: c,
                   columnas: [
-                    Columna('Insumo', (f) => '${f['productos']?['nombre']}'),
-                    Columna('SKU', (f) => '${f['productos']?['sku']}'),
+                    Columna('Insumo', (f) => '${f['productos']?['nombre'] ?? '—'}'),
+                    Columna('SKU', (f) => '${f['productos']?['sku'] ?? '—'}'),
                     Columna('Cantidad', (f) => dec2(f['cantidad']), numerica: true),
                   ],
                 ),

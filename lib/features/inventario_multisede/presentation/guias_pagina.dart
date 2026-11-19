@@ -71,8 +71,8 @@ class GuiasPagina extends ConsumerWidget {
               filas: l,
               columnas: [
                 Columna('N.º', (g) => '${g['numero']}', numerica: true),
-                Columna('Origen', (g) => '${g['origen']?['nombre']}'),
-                Columna('Destino', (g) => '${g['destino']?['nombre']}'),
+                Columna('Origen', (g) => '${g['origen']?['nombre'] ?? '—'}'),
+                Columna('Destino', (g) => '${g['destino']?['nombre'] ?? '—'}'),
                 Columna('Lotes', _detalle, ancho: 280),
                 Columna('Emitida', (g) => fechaHora(g['fecha_emision'])),
                 Columna('Emisor', (g) => '${g['emisor']?['nombre_completo'] ?? '—'}'),

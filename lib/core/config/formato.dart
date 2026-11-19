@@ -10,7 +10,8 @@ final _fechaHora = DateFormat('dd/MM/yyyy HH:mm', 'es');
 double aNumero(Object? v) => v is num ? v.toDouble() : double.tryParse('${v ?? ''}') ?? 0;
 DateTime? aFecha(Object? v) => v == null ? null : DateTime.tryParse('$v')?.toLocal();
 
-String bs(Object? v) => 'Bs ${_num2.format(aNumero(v))}';
+/// Importe en bolivianos; el espacio no separable evita que «Bs» quede solo en una línea.
+String bs(Object? v) => 'Bs\u00A0${_num2.format(aNumero(v))}';
 String entero(Object? v) => _num0.format(aNumero(v).round());
 String dec1(Object? v) => _num1.format(aNumero(v));
 String dec2(Object? v) => _num2.format(aNumero(v));

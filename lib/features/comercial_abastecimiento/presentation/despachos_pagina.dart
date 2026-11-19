@@ -78,9 +78,9 @@ class DespachosPagina extends ConsumerWidget {
                   filas: l,
                   columnas: [
                     Columna('Fecha', (d) => fechaHora(d['fecha_registro'])),
-                    Columna('Nota', (d) => '${d['notas_venta']?['numero']}'),
-                    Columna('Centro', (d) => '${d['sedes']?['nombre']}'),
-                    Columna('Lote', (d) => '${d['lotes']?['codigo']}'),
+                    Columna('Nota', (d) => '${d['notas_venta']?['numero'] ?? '—'}'),
+                    Columna('Centro', (d) => '${d['sedes']?['nombre'] ?? '—'}'),
+                    Columna('Lote', (d) => '${d['lotes']?['codigo'] ?? '—'}'),
                     Columna('Rollos', (d) => '${d['cantidad']}', numerica: true),
                     Columna('Vendido', (d) => kg(d['peso_vendido']), numerica: true),
                     Columna('Despachado', (d) => kg(d['peso_despachado']), numerica: true),

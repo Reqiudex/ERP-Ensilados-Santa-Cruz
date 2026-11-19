@@ -68,7 +68,7 @@ class _ComprasPaginaState extends ConsumerState<ComprasPagina> {
               ],
               columnas: [
                 Columna('Fecha', (c) => fecha(c['fecha'])),
-                Columna('Proveedor', (c) => '${c['proveedores']?['razon_social']}'),
+                Columna('Proveedor', (c) => '${c['proveedores']?['razon_social'] ?? '—'}'),
                 Columna('Tipo', (c) => etiqueta(c['proveedores']?['tipo'])),
                 Columna('Total', (c) => bs(c['total']), numerica: true),
                 Columna('Saldo', (c) => bs(c['saldo']), numerica: true),

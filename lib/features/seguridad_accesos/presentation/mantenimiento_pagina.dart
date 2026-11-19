@@ -61,17 +61,18 @@ class MantenimientoPagina extends ConsumerWidget {
           ),
           TarjetaDato(
             titulo: 'Último respaldo',
-            valor: ultimo == null ? '—' : fechaHora(ultimo['fecha']),
+            valor: ultimo == null ? '—' : fecha(ultimo['fecha']),
             icono: Icons.inventory_2_outlined,
             color: Colores.ambarOscuro,
-            detalle: ultimo == null ? 'Aún no hay respaldos' : 'Destino: ${_destino(ultimo['datos'])}',
+            detalle: ultimo == null ? 'Aún no hay respaldos' : '${fechaHora(ultimo['fecha'])} · ${_destino(ultimo['datos'])}',
           ),
           TarjetaDato(
             titulo: 'Mantenimiento automático',
-            valor: mant.value?['ultima'] == null ? 'Pendiente' : fechaHora(mant.value!['ultima']),
+            valor: mant.value?['ultima'] == null ? 'Pendiente' : fecha(mant.value!['ultima']),
             icono: Icons.auto_fix_high_outlined,
             color: Colores.exito,
-            detalle: '${mant.value?['programacion'] ?? 'Todos los días a las 04:00 (Bolivia)'} · actualiza estadísticas e índices',
+            detalle: '${mant.value?['ultima'] == null ? '' : 'Última: ${fechaHora(mant.value!['ultima'])} · '}'
+                '${mant.value?['programacion'] ?? 'Todos los días a las 04:00 (Bolivia)'}',
           ),
         ]),
         if (admin) ...[
