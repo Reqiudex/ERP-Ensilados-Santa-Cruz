@@ -4,17 +4,47 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/formato.dart';
 import '../../../core/conexion/conexion.dart';
+import '../../../core/errores/errores.dart';
 import '../../../core/supabase/api.dart';
 import '../../../core/tema/tema.dart';
 import '../../../core/widgets/componentes.dart';
+import '../../operaciones_ensilado/data/cola_sincronizacion.dart';
 import '../../seguridad_accesos/domain/roles_y_permisos.dart';
 import '../../seguridad_accesos/presentation/sesion.dart';
 import '../data/repositorio_comercial_supabase.dart';
 import '../domain/calculos_comerciales.dart';
 
-final despachosPendientesProvider =
-    FutureProvider.autoDispose<List<Fila>>((ref) => ref.watch(repositorioComercialProvider).despachosPendientes());
-final despachosProvider = FutureProvider.autoDispose<List<Fila>>((ref) => ref.watch(repositorioComercialProvider).despachos());
+final despachosPendientesProvider = FutureProvider.autoDispose<List<Fila>>((ref) async {
+  ref.watch(pendientesSincronizarProvider);
+  final enLinea = ref.watch(enLineaProvider);
+  final cache = ref.watch(datosOperadorProvider.select((m) => m['despachos_pendientes']));
+  List<Fila> locales() =>
+      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+  if (!enLinea) return locales();
+  try {
+    final l = await ref.watch(repositorioComercialProvider).despachosPendientes();
+    ref.read(datosOperadorProvider.notifier).guardarClave('despachos_pendientes', l);
+    return l;
+  } catch (_) {
+    return locales();
+  }
+});
+
+final despachosProvider = FutureProvider.autoDispose<List<Fila>>((ref) async {
+  ref.watch(pendientesSincronizarProvider);
+  final enLinea = ref.watch(enLineaProvider);
+  final cache = ref.watch(datosOperadorProvider.select((m) => m['despachos']));
+  List<Fila> locales() =>
+      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+  if (!enLinea) return locales();
+  try {
+    final l = await ref.watch(repositorioComercialProvider).despachos();
+    ref.read(datosOperadorProvider.notifier).guardarClave('despachos', l);
+    return l;
+  } catch (_) {
+    return locales();
+  }
+});
 
 /// RF-19 Control de despachos: cada rollo se pesa; en ventas por tonelada se controla la tolerancia del 5 %.
 class DespachosPagina extends ConsumerWidget {
@@ -35,7 +65,8 @@ class DespachosPagina extends ConsumerWidget {
         ref.invalidate(despachosProvider);
       },
       hijos: [
-        if (operador && !enLinea) const Aviso('Los despachos requieren conexión.', tipo: 'alerta'),
+        if (operador && !enLinea)
+          const Aviso('Sin conexión: los despachos sobre notas descargadas se guardan en el teléfono y se sincronizan al recuperar la señal.', tipo: 'alerta'),
         if (operador || perfil.rol.comoGerente)
           Asincrono(ref.watch(despachosPendientesProvider), datos: (l) {
             if (l.isEmpty) return const MensajeVacio(titulo: 'No hay notas de venta por despachar en su centro.', icono: Icons.fire_truck_outlined);
@@ -61,7 +92,7 @@ class DespachosPagina extends ConsumerWidget {
                         const SizedBox(height: 12),
                         if (operador)
                           FilledButton.icon(
-                            onPressed: enLinea && d['pendiente_aprobacion'] != true ? () => _despachar(context, ref, d) : null,
+                            onPressed: d['pendiente_aprobacion'] != true && aNumero(d['reservado_sede']) > 0 ? () => _despachar(context, ref, d) : null,
                             icon: const Icon(Icons.scale),
                             label: const Text('Pesar rollos y despachar'),
                           ),
@@ -98,8 +129,20 @@ class DespachosPagina extends ConsumerWidget {
                         onPressed: () async {
                           final t = await pedirTexto(context, 'Peso reportado por el cliente (báscula pública)', etiqueta: 'Peso en kg', minimo: 2);
                           if (t == null || !context.mounted) return;
-                          await ejecutar(context, () => ref.read(repositorioComercialProvider).registrarPesoBascula(d['id'], aNumero(t.replaceAll(',', '.'))),
-                              exito: 'Peso de báscula pública anotado.');
+                          final pKg = aNumero(t.replaceAll(',', '.'));
+                          await ejecutar(context, () async {
+                            if (!ref.read(enLineaProvider)) {
+                              await ref.read(colaProvider.notifier).registrar('registrar_peso_bascula', {'despacho_id': d['id'], 'peso': pKg});
+                              return {'ok': true};
+                            }
+                            try {
+                              return await ref.read(repositorioComercialProvider).registrarPesoBascula(d['id'], pKg);
+                            } on ErrorNegocio catch (e) {
+                              if (e.codigo != 'red') rethrow;
+                              await ref.read(colaProvider.notifier).registrar('registrar_peso_bascula', {'despacho_id': d['id'], 'peso': pKg});
+                              return {'ok': true};
+                            }
+                          }, exito: ref.read(enLineaProvider) ? 'Peso de báscula pública anotado.' : 'Peso guardado en el teléfono: se enviará al recuperar la señal.');
                           ref.invalidate(despachosProvider);
                         },
                         child: const Text('Báscula pública'),
@@ -206,14 +249,45 @@ class DespachosPagina extends ConsumerWidget {
           TextField(controller: bascula, decoration: const InputDecoration(labelText: 'Peso en báscula pública (opcional, kg)')),
         ]);
       },
-      alGuardar: () => ejecutar(context, () => ref.read(repositorioComercialProvider).registrarDespacho(
-          d['nota_id'], d['lote_id'], pesos, placa.text.trim(), receptor.text.trim(),
-          bascula.text.trim().isEmpty ? null : aNumero(bascula.text.replaceAll(',', '.')))),
+      alGuardar: () => ejecutar(context, () async {
+        final pBascula = bascula.text.trim().isEmpty ? null : aNumero(bascula.text.replaceAll(',', '.'));
+        final totalKg = pesos.fold<double>(0, (a, x) => a + x);
+        final vendidoKg = porTonelada
+            ? aNumero(d['cantidad']) * 1000 * pesos.length / (d['rollos'] as num)
+            : pesos.length * aNumero(d['peso_promedio']);
+        Future<Fila> encolarLocal() async {
+          await ref.read(colaProvider.notifier).registrar('registrar_despacho', {
+            'nota_id': d['nota_id'],
+            'numero_nota': d['numero'],
+            'lote_id': d['lote_id'],
+            'codigo_lote': d['lote'],
+            'pesos': pesos,
+            'peso_vendido': vendidoKg,
+            'placa': placa.text.trim().toUpperCase(),
+            'receptor': receptor.text.trim(),
+            'peso_bascula': pBascula,
+          });
+          return {'estado': 'offline', 'peso_despachado': totalKg};
+        }
+
+        if (!ref.read(enLineaProvider)) return await encolarLocal();
+        try {
+          return await ref.read(repositorioComercialProvider).registrarDespacho(
+              d['nota_id'], d['lote_id'], pesos, placa.text.trim(), receptor.text.trim(), pBascula);
+        } on ErrorNegocio catch (e) {
+          if (e.codigo != 'red') rethrow;
+          return await encolarLocal();
+        }
+      }),
     );
     if (r != null && context.mounted) {
-      avisar(context, r['estado'] == 'pendiente'
-          ? 'Despacho de ${kg(r['peso_despachado'])} enviado al gerente: supera la tolerancia.'
-          : 'Despacho registrado: ${kg(r['peso_despachado'])}.');
+      avisar(
+          context,
+          r['estado'] == 'offline'
+              ? 'Despacho de ${kg(r['peso_despachado'])} guardado en el teléfono: se enviará al recuperar la señal.'
+              : r['estado'] == 'pendiente'
+                  ? 'Despacho de ${kg(r['peso_despachado'])} enviado al gerente: supera la tolerancia.'
+                  : 'Despacho registrado: ${kg(r['peso_despachado'])}.');
       ref.invalidate(despachosPendientesProvider);
       ref.invalidate(despachosProvider);
     }

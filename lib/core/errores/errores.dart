@@ -30,9 +30,29 @@ const _restricciones = <String, String>{
 /// Errores propios (lanzados por las funciones del servidor con un texto ya pensado para el usuario).
 const _codigosPropios = {'P0001'};
 
+/// Detecta si el error proviene de falta de red, DNS, socket o timeout (Android, iOS, web o pruebas).
+bool esErrorRed(Object error, [String? mensaje]) {
+  final m = '${mensaje ?? ''} $error'.toLowerCase();
+  return m.contains('socket') ||
+      m.contains('failed host') ||
+      m.contains('clientexception') ||
+      m.contains('network') ||
+      m.contains('connection') ||
+      m.contains('unreachable') ||
+      m.contains('timed out') ||
+      m.contains('timeout') ||
+      m.contains('handshake') ||
+      m.contains('errno =') ||
+      m.contains('xmlhttprequest') ||
+      m.contains('sin conexión');
+}
+
 ErrorNegocio traducirError(Object error, {String? codigo, String? mensaje, String? detalle}) {
   final c = codigo ?? '';
   final m = mensaje ?? error.toString();
+  if (c == 'red' || esErrorRed(error, m)) {
+    return const ErrorNegocio('Sin conexión con el servidor. Revise su internet e intente de nuevo.', codigo: 'red');
+  }
   if (c == '42501' || c == '403') {
     final propio = m.isNotEmpty && !m.toLowerCase().contains('permission denied') && !m.contains('policy');
     return ErrorNegocio(propio ? m : 'Su rol no tiene permiso para esta operación.', codigo: '42501', prohibido: true);
@@ -49,9 +69,6 @@ ErrorNegocio traducirError(Object error, {String? codigo, String? mensaje, Strin
     'PGRST301' || '401' => ErrorNegocio('Su sesión venció. Vuelva a iniciar sesión.', codigo: c),
     _ when m.toLowerCase().contains('invalid login') || m.toLowerCase().contains('banned') =>
       const ErrorNegocio('Credenciales incorrectas o cuenta bloqueada temporalmente.'),
-    _ when m.toLowerCase().contains('socket') || m.toLowerCase().contains('failed host') ||
-        m.toLowerCase().contains('clientexception') || m.toLowerCase().contains('network') =>
-      const ErrorNegocio('Sin conexión con el servidor. Revise su internet e intente de nuevo.', codigo: 'red'),
     _ => const ErrorNegocio('No se pudo completar la operación. Intente de nuevo o avise al administrador.'),
   };
 }

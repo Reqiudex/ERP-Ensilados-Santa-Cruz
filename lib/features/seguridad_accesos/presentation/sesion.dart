@@ -25,28 +25,58 @@ class SesionControlador extends AsyncNotifier<EstadoSesion> {
   Future<EstadoSesion> build() async {
     final repo = ref.read(repositorioSeguridadProvider);
     final pin = ref.read(pinLocalProvider);
+    final enLinea = ref.read(enLineaProvider);
+
+    Future<EstadoSesion> respaldoLocal() async {
+      if (!esAndroid) return const EstadoSesion();
+      final guardado = await pin.perfilGuardado();
+      if (guardado == null) return const EstadoSesion();
+      final conPin = await pin.tienePin(guardado.id);
+      return EstadoSesion(perfil: guardado, bloqueadaPorPin: conPin, sinConexion: true);
+    }
+
+    if (!enLinea && esAndroid) {
+      return await respaldoLocal();
+    }
+
     try {
       final p = await repo.perfilActual();
-      if (p != null && esAndroid) await pin.guardarPerfil(p);
-      return EstadoSesion(perfil: p);
+      if (p != null) {
+        if (esAndroid) await pin.guardarPerfil(p);
+        return EstadoSesion(perfil: p);
+      }
+      if (esAndroid && !ref.read(enLineaProvider)) {
+        return await respaldoLocal();
+      }
+      return const EstadoSesion();
     } on ErrorNegocio catch (e) {
-      // Android sin señal: se permite desbloquear con el PIN personal del operador que inició el turno.
-      if (esAndroid && e.codigo == 'red') {
-        final guardado = await pin.perfilGuardado();
-        if (guardado != null && await pin.tienePin(guardado.id)) {
-          return EstadoSesion(perfil: guardado, bloqueadaPorPin: true, sinConexion: true);
-        }
+      // Android sin señal o sesión expirada estando sin señal: recupera el perfil del operador en el dispositivo.
+      if (esAndroid && (e.codigo == 'red' || !ref.read(enLineaProvider))) {
+        return await respaldoLocal();
       }
       return const EstadoSesion();
     } catch (_) {
+      if (esAndroid) return await respaldoLocal();
       return const EstadoSesion();
     }
   }
 
   Future<void> iniciarSesion(String identificador, String clave) async {
-    final p = await ref.read(repositorioSeguridadProvider).iniciarSesion(identificador, clave);
-    if (esAndroid) await ref.read(pinLocalProvider).guardarPerfil(p);
-    state = AsyncData(EstadoSesion(perfil: p));
+    final pin = ref.read(pinLocalProvider);
+    try {
+      final p = await ref.read(repositorioSeguridadProvider).iniciarSesion(identificador, clave);
+      if (esAndroid) await pin.guardarCredencialesOffline(p, clave);
+      state = AsyncData(EstadoSesion(perfil: p));
+    } on ErrorNegocio catch (e) {
+      if (esAndroid && (e.codigo == 'red' || !ref.read(enLineaProvider))) {
+        final local = await pin.verificarCredencialesOffline(identificador, clave);
+        if (local != null) {
+          state = AsyncData(EstadoSesion(perfil: local, sinConexion: true));
+          return;
+        }
+      }
+      rethrow;
+    }
   }
 
   /// true mientras el propio usuario sale: así el aviso de «sesión revocada» de su propio cierre se ignora.
@@ -90,16 +120,19 @@ class SesionControlador extends AsyncNotifier<EstadoSesion> {
   Future<ResultadoPin> desbloquearConPin(String pin) async {
     final p = state.value?.perfil;
     final par = p?.parametros ?? const {};
+    final enLinea = ref.read(enLineaProvider);
+    // En operación sin conexión 24/7 no se expulsa al operador por el reloj de sincronización mientras esté sin señal.
+    final horasMax = enLinea ? ((par['horas_sin_sincronizar'] as num?)?.toInt() ?? 12) : 24 * 365;
     final r = await ref.read(pinLocalProvider).desbloquear(pin,
-        intentos: (par['pin_intentos'] as num?)?.toInt() ?? 3, horas: (par['horas_sin_sincronizar'] as num?)?.toInt() ?? 12);
+        intentos: (par['pin_intentos'] as num?)?.toInt() ?? 3, horas: horasMax);
     if (r == ResultadoPin.desbloqueado) {
-      state = AsyncData(EstadoSesion(perfil: p, sinConexion: !ref.read(enLineaProvider)));
+      state = AsyncData(EstadoSesion(perfil: p, sinConexion: !enLinea));
     } else if (r == ResultadoPin.exigeInicioEnLinea) {
       try {
         await ref.read(repositorioSeguridadProvider).cerrarSesion();
       } catch (_) {}
       state = const AsyncData(EstadoSesion(
-          mensaje: 'Por seguridad debe iniciar sesión en línea (tres PIN erróneos o más de 12 horas sin sincronizar).'));
+          mensaje: 'Por seguridad debe iniciar sesión con su contraseña (tres PIN erróneos o más de 12 horas sin sincronizar).'));
     }
     return r;
   }

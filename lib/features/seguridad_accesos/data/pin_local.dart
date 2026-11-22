@@ -40,11 +40,40 @@ class PinLocal {
     await marcarSincronizado();
   }
 
+  /// Guarda el resumen bcrypt de la contraseña del último ingreso en línea para permitir entrar sin señal
+  /// incluso si el operador cerró sesión o el teléfono se reinició sin PIN configurado.
+  Future<void> guardarCredencialesOffline(Perfil perfil, String clave) async {
+    await guardarPerfil(perfil);
+    await _almacen.escribir('clave_resumen', _seguridad.hashCredencial(clave));
+    await _almacen.escribir('clave_usuario', perfil.id);
+    await _almacen.escribir('clave_correo', perfil.correo.toLowerCase());
+    await _almacen.escribir('clave_ci', perfil.ci.trim());
+  }
+
+  /// Verifica el identificador (CI o correo) y la contraseña contra el caché local cuando no hay señal.
+  Future<Perfil?> verificarCredencialesOffline(String identificador, String clave) async {
+    final id = identificador.trim().toLowerCase();
+    if (id.isEmpty || clave.isEmpty) return null;
+    final guardado = await perfilGuardado();
+    if (guardado == null) return null;
+    final correo = (await _almacen.leer('clave_correo')) ?? guardado.correo.toLowerCase();
+    final ci = (await _almacen.leer('clave_ci')) ?? guardado.ci.trim();
+    if (id != correo && id != ci) return null;
+    final hash = await _almacen.leer('clave_resumen');
+    if (hash == null || !_seguridad.verificarCredencial(clave, hash)) return null;
+    return guardado;
+  }
+
   Future<void> marcarSincronizado() => _almacen.escribir('ultima_sync', DateTime.now().toIso8601String());
 
   Future<Perfil?> perfilGuardado() async {
     final t = await _almacen.leer('perfil_cache');
-    return t == null ? null : Perfil.desdeJson(jsonDecode(t) as Map<String, dynamic>);
+    if (t == null) return null;
+    try {
+      return Perfil.desdeJson(jsonDecode(t) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<EstadoPin> estado() async => EstadoPin(

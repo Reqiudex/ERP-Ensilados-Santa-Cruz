@@ -3,16 +3,49 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/formato.dart';
 import '../../../core/conexion/conexion.dart';
+import '../../../core/errores/errores.dart';
 import '../../../core/supabase/api.dart';
 import '../../../core/tema/tema.dart';
 import '../../../core/widgets/componentes.dart';
+import '../../operaciones_ensilado/data/cola_sincronizacion.dart';
 import '../../seguridad_accesos/domain/roles_y_permisos.dart';
 import '../../seguridad_accesos/presentation/sesion.dart';
 import '../data/repositorio_inventario_supabase.dart';
 import 'stock_lotes_pagina.dart';
 
-final guiasProvider = FutureProvider.autoDispose<List<Fila>>((ref) => ref.watch(repositorioInventarioProvider).guias());
-final sedesInventarioProvider = FutureProvider.autoDispose<List<Fila>>((ref) => ref.watch(repositorioInventarioProvider).sedes());
+final guiasProvider = FutureProvider.autoDispose<List<Fila>>((ref) async {
+  ref.watch(pendientesSincronizarProvider);
+  final enLinea = ref.watch(enLineaProvider);
+  final cache = ref.watch(datosOperadorProvider.select((m) => m['guias']));
+  List<Fila> locales() =>
+      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+  if (!enLinea) return locales();
+  try {
+    final l = await ref.watch(repositorioInventarioProvider).guias();
+    ref.read(datosOperadorProvider.notifier).guardarClave('guias', l);
+    return l;
+  } catch (_) {
+    return locales();
+  }
+});
+
+final sedesInventarioProvider = FutureProvider.autoDispose<List<Fila>>((ref) async {
+  final enLinea = ref.watch(enLineaProvider);
+  final cache = ref.watch(datosOperadorProvider.select((m) => m['sedes']));
+  List<Fila> locales() {
+    final l = ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+    return l.isEmpty ? sedesPredeterminadas : l;
+  }
+
+  if (!enLinea) return locales();
+  try {
+    final l = await ref.watch(repositorioInventarioProvider).sedes();
+    ref.read(datosOperadorProvider.notifier).guardarClave('sedes', l);
+    return l.isEmpty ? locales() : l;
+  } catch (_) {
+    return locales();
+  }
+});
 
 /// RF-14 Guías de remisión y transferencia entre centros.
 class GuiasPagina extends ConsumerWidget {
@@ -32,11 +65,12 @@ class GuiasPagina extends ConsumerWidget {
       acciones: [
         if (operador)
           FilledButton.icon(
-              onPressed: enLinea ? () => _emitir(context, ref) : null, icon: const Icon(Icons.local_shipping_outlined), label: const Text('Emitir guía')),
+              onPressed: () => _emitir(context, ref), icon: const Icon(Icons.local_shipping_outlined), label: const Text('Emitir guía')),
       ],
       alRefrescar: () async => ref.invalidate(guiasProvider),
       hijos: [
-        if (operador && !enLinea) const Aviso('Las guías requieren conexión.', tipo: 'alerta'),
+        if (operador && !enLinea)
+          const Aviso('Sin conexión: las emisiones y recepciones de guías se guardan en el teléfono y se sincronizan al recuperar la señal.', tipo: 'alerta'),
         Asincrono(v, datos: (l) {
           final porRecibir = l.where((g) => g['estado'] == 'en_transito' && g['sede_destino'] == perfil.sedeId).toList();
           return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -57,7 +91,7 @@ class GuiasPagina extends ConsumerWidget {
                             Text('${_detalle(g)} · emitida ${fechaHora(g['fecha_emision'])}', style: const TextStyle(color: Colores.textoSuave)),
                             const SizedBox(height: 8),
                             FilledButton.icon(
-                                onPressed: enLinea ? () => _recibir(context, ref, g) : null,
+                                onPressed: () => _recibir(context, ref, g),
                                 icon: const Icon(Icons.fact_check_outlined),
                                 label: const Text('Confirmar recepción')),
                           ]),
@@ -153,10 +187,33 @@ class GuiasPagina extends ConsumerWidget {
           avisar(context, 'Elija el destino y agregue al menos un lote.', error: true);
           return null;
         }
-        final r = await ejecutar(context, () => ref.read(repositorioInventarioProvider).emitirGuia(
-            destino!, [for (final i in items) {'lote_id': i['lote_id'], 'cantidad': i['cantidad']}]));
+        final listaItems = [
+          for (final i in items) {'lote_id': i['lote_id'], 'cantidad': i['cantidad'], 'codigo': i['codigo']}
+        ];
+        if (!ref.read(enLineaProvider)) {
+          await ref.read(colaProvider.notifier).registrar('emitir_guia', {'destino': destino, 'items': listaItems});
+          if (context.mounted) avisar(context, 'Guía guardada en el teléfono: se emitirá al recuperar la señal.');
+          ref.invalidate(guiasProvider);
+          return true;
+        }
+        final r = await ejecutar(context, () async {
+          try {
+            return await ref.read(repositorioInventarioProvider).emitirGuia(
+                destino!, [for (final i in items) {'lote_id': i['lote_id'], 'cantidad': i['cantidad']}]);
+          } on ErrorNegocio catch (e) {
+            if (e.codigo != 'red') rethrow;
+            await ref.read(colaProvider.notifier).registrar('emitir_guia', {'destino': destino, 'items': listaItems});
+            return {'numero': 'PEND'};
+          }
+        });
         if (r == null) return null;
-        if (context.mounted) avisar(context, 'Guía N.º ${r['numero']} emitida: el stock quedó en tránsito.');
+        if (context.mounted) {
+          avisar(
+              context,
+              r['numero'] == 'PEND'
+                  ? 'Guía guardada en el teléfono: se emitirá al recuperar la señal.'
+                  : 'Guía N.º ${r['numero']} emitida: el stock quedó en tránsito.');
+        }
         ref.invalidate(guiasProvider);
         ref.invalidate(lotesProvider);
         return true;
@@ -184,14 +241,33 @@ class GuiasPagina extends ConsumerWidget {
           ),
       ]),
       alGuardar: () async {
-        final r = await ejecutar(context, () => ref.read(repositorioInventarioProvider).recibirGuia(g['id'], [
-              for (final d in detalle) {'lote_id': d['lote_id'], 'cantidad_recibida': int.tryParse(ctrls[d['lote_id']]!.text) ?? 0},
-            ]));
+        final listaRec = [
+          for (final d in detalle) {'lote_id': d['lote_id'], 'cantidad_recibida': int.tryParse(ctrls[d['lote_id']]!.text) ?? 0},
+        ];
+        if (!ref.read(enLineaProvider)) {
+          await ref.read(colaProvider.notifier).registrar('recibir_guia', {'guia_id': g['id'], 'items': listaRec});
+          if (context.mounted) avisar(context, 'Recepción guardada en el teléfono: se sincronizará al recuperar la señal.');
+          ref.invalidate(guiasProvider);
+          return true;
+        }
+        final r = await ejecutar(context, () async {
+          try {
+            return await ref.read(repositorioInventarioProvider).recibirGuia(g['id'], listaRec);
+          } on ErrorNegocio catch (e) {
+            if (e.codigo != 'red') rethrow;
+            await ref.read(colaProvider.notifier).registrar('recibir_guia', {'guia_id': g['id'], 'items': listaRec});
+            return {'offline': true};
+          }
+        });
         if (r == null) return null;
         if (context.mounted) {
-          avisar(context, (r['diferencia'] as num? ?? 0) > 0
-              ? 'Recepción confirmada. Faltaron ${r['diferencia']} rollos: se envió la solicitud de merma de traslado al gerente.'
-              : 'Recepción confirmada sin diferencias.');
+          if (r['offline'] == true) {
+            avisar(context, 'Recepción guardada en el teléfono: se sincronizará al recuperar la señal.');
+          } else {
+            avisar(context, (r['diferencia'] as num? ?? 0) > 0
+                ? 'Recepción confirmada. Faltaron ${r['diferencia']} rollos: se envió la solicitud de merma de traslado al gerente.'
+                : 'Recepción confirmada sin diferencias.');
+          }
         }
         ref.invalidate(guiasProvider);
         return true;

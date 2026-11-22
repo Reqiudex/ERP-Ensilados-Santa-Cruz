@@ -1,28 +1,46 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../conexion/conexion.dart';
 import '../errores/errores.dart';
 
 typedef Fila = Map<String, dynamic>;
 
 final supabaseProvider = Provider<SupabaseClient>((ref) => Supabase.instance.client);
 
-/// Acceso a la API de Supabase con traducción de errores. Toda escritura de negocio pasa por funciones RPC.
+/// Acceso a la API de Supabase con traducción de errores y límite de espera para no bloquear la app sin señal.
+/// Toda escritura de negocio pasa por funciones RPC.
 class Api {
-  Api(this.cliente);
+  Api(this.cliente, {this.enLinea, this.alCambiarAlcance});
   final SupabaseClient cliente;
+  final bool Function()? enLinea;
+  final void Function(bool alcanzable)? alCambiarAlcance;
+
+  static const _timeout = Duration(seconds: 8);
 
   Future<T> _seguro<T>(Future<T> Function() f) async {
+    if (enLinea != null && !enLinea!()) {
+      throw const ErrorNegocio('Sin conexión con el servidor. Revise su internet e intente de nuevo.', codigo: 'red');
+    }
     try {
-      return await f();
+      final res = await f().timeout(_timeout);
+      alCambiarAlcance?.call(true);
+      return res;
     } on PostgrestException catch (e) {
-      throw traducirError(e, codigo: e.code, mensaje: e.message, detalle: e.details?.toString());
+      final err = traducirError(e, codigo: e.code, mensaje: e.message, detalle: e.details?.toString());
+      if (err.codigo == 'red') alCambiarAlcance?.call(false);
+      throw err;
     } on AuthException catch (e) {
-      throw traducirError(e, codigo: e.statusCode, mensaje: e.message);
-    } on ErrorNegocio {
+      final err = traducirError(e, codigo: e.statusCode, mensaje: e.message);
+      if (err.codigo == 'red') alCambiarAlcance?.call(false);
+      throw err;
+    } on ErrorNegocio catch (e) {
+      if (e.codigo == 'red') alCambiarAlcance?.call(false);
       rethrow;
     } catch (e) {
-      throw traducirError(e);
+      final err = traducirError(e);
+      if (err.codigo == 'red') alCambiarAlcance?.call(false);
+      throw err;
     }
   }
 
@@ -73,4 +91,9 @@ class Api {
       cliente.from(tabla).stream(primaryKey: [clave]);
 }
 
-final apiProvider = Provider<Api>((ref) => Api(ref.watch(supabaseProvider)));
+final apiProvider = Provider<Api>((ref) => Api(
+      ref.watch(supabaseProvider),
+      enLinea: () => !ref.read(modoSinRedProvider) && (ref.read(redProvider).value ?? true),
+      alCambiarAlcance: (ok) =>
+          ok ? ref.read(alcanceServidorProvider.notifier).marcarEnLinea() : ref.read(alcanceServidorProvider.notifier).marcarCaido(),
+    ));

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/formato.dart';
+import '../../../core/conexion/conexion.dart';
+import '../../../core/errores/errores.dart';
 import '../../../core/supabase/api.dart';
 import '../../../core/tema/tema.dart';
 import '../../../core/widgets/componentes.dart';
@@ -11,9 +13,20 @@ import '../../seguridad_accesos/presentation/sesion.dart';
 import '../data/cola_sincronizacion.dart';
 import '../data/repositorio_operaciones_supabase.dart';
 
-final ordenesProvider = FutureProvider.autoDispose<List<Fila>>((ref) {
+final ordenesProvider = FutureProvider.autoDispose<List<Fila>>((ref) async {
   ref.watch(pendientesSincronizarProvider);
-  return ref.watch(repositorioOperacionesProvider).ordenes();
+  final enLinea = ref.watch(enLineaProvider);
+  final cache = ref.watch(datosOperadorProvider.select((m) => m['ordenes_lista']));
+  List<Fila> locales() =>
+      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+  if (!enLinea) return locales();
+  try {
+    final l = await ref.watch(repositorioOperacionesProvider).ordenes();
+    ref.read(datosOperadorProvider.notifier).guardarClave('ordenes_lista', l);
+    return l;
+  } catch (_) {
+    return locales();
+  }
 });
 
 /// El lote de una orden llega como objeto (relación uno a uno) o como lista según la consulta.
@@ -110,7 +123,8 @@ class OrdenesPagina extends ConsumerWidget {
 
   Future<void> _abrir(BuildContext context, WidgetRef ref) async {
     final perfil = ref.read(perfilProvider)!;
-    final granos = (((ref.read(datosOperadorProvider))['granos'] as List?) ?? const []).cast<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+    final granosRaw = (((ref.read(datosOperadorProvider))['granos'] as List?) ?? const []).cast<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+    final granos = granosRaw.isEmpty ? granosPredeterminados : granosRaw;
     String? grano;
     await dialogoFormulario<bool>(
       context,
@@ -169,7 +183,40 @@ class OrdenesPagina extends ConsumerWidget {
           const Aviso('Si los insumos consumidos superan el stock del centro, el cierre se bloquea e indica el faltante.'),
         ]);
       },
-      alGuardar: () => ejecutar(context, () => ref.read(repositorioOperacionesProvider).cerrarOrden(o['id'], int.tryParse(ctrl.text) ?? 0)),
+      alGuardar: () => ejecutar(context, () async {
+        final rollos = int.tryParse(ctrl.text) ?? 0;
+        if (rollos <= 0) throw const ErrorNegocio('Indique la cantidad de rollos obtenidos.');
+        Future<Fila> encolarLocal() async {
+          final ahora = DateTime.now().toUtc().toIso8601String();
+          final pref = '${o['granos']?['nombre'] ?? 'MAI'}'.toUpperCase().replaceAll('Í', 'I');
+          final codigoTemp = 'L-${pref.length >= 3 ? pref.substring(0, 3) : pref}-PEND';
+          final rend = rendimientoRollosPorTonelada(rollos, t);
+          final id = await ref.read(colaProvider.notifier).registrar('cerrar_orden', {
+            'orden_id': o['id'],
+            'rollos': rollos,
+            'fecha_dispositivo': ahora,
+            'codigo_temporal': codigoTemp,
+          });
+          return {
+            'ok': true,
+            'lote_id': id,
+            'codigo': codigoTemp,
+            'estado': 'fermentacion',
+            'rendimiento': rend,
+            'alerta': rendimientoFueraDeRango(rend, mn, mx)
+                ? 'Guardado en el teléfono: al reconectar el servidor asignará el código oficial del lote.'
+                : 'Guardado sin conexión: al recuperar la señal se sincronizará con el servidor.',
+          };
+        }
+
+        if (!ref.read(enLineaProvider)) return await encolarLocal();
+        try {
+          return await ref.read(repositorioOperacionesProvider).cerrarOrden(o['id'], rollos);
+        } on ErrorNegocio catch (e) {
+          if (e.codigo == 'red') return await encolarLocal();
+          rethrow;
+        }
+      }),
     );
     if (r != null && context.mounted) {
       await showDialog(

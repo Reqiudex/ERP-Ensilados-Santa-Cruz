@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/operaciones_ensilado/data/cola_sincronizacion.dart';
+import '../../features/seguridad_accesos/data/pin_local.dart';
 import '../../features/seguridad_accesos/data/repositorio_seguridad_supabase.dart';
 import '../../features/seguridad_accesos/domain/reglas_seguridad.dart';
 import '../../features/seguridad_accesos/domain/roles_y_permisos.dart';
@@ -32,6 +33,7 @@ class _EstructuraState extends ConsumerState<Estructura> {
   DateTime _ultimaActividad = DateTime.now();
   Timer? _reloj;
   Timer? _vigilancia;
+  Timer? _reintentoSync;
   RealtimeChannel? _canalSesion;
   bool _revisando = false;
   bool _expulsando = false;
@@ -44,12 +46,15 @@ class _EstructuraState extends ConsumerState<Estructura> {
     // el dispositivo sale al instante. La revisión periódica queda como respaldo si el canal se corta.
     _escucharRevocacion();
     _vigilancia = Timer.periodic(const Duration(seconds: 5), (_) => _revisarRevocacion());
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final p = ref.read(perfilProvider);
-      if (p?.rol == Rol.operadorCentro) {
-        ref.read(datosOperadorProvider.notifier).refrescar();
+    // Reintento automático de sincronización cada 15 s cuando hay registros en cola y señal disponible.
+    _reintentoSync = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (ref.read(enLineaProvider) && ref.read(pendientesSincronizarProvider) > 0) {
         ref.read(colaProvider.notifier).sincronizar();
       }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(datosOperadorProvider.notifier).refrescar();
+      ref.read(colaProvider.notifier).sincronizar();
     });
   }
 
@@ -57,6 +62,7 @@ class _EstructuraState extends ConsumerState<Estructura> {
   void dispose() {
     _reloj?.cancel();
     _vigilancia?.cancel();
+    _reintentoSync?.cancel();
     final canal = _canalSesion;
     if (canal != null) Supabase.instance.client.removeChannel(canal);
     super.dispose();
@@ -114,7 +120,14 @@ class _EstructuraState extends ConsumerState<Estructura> {
     if (p == null) return;
     if (sesionVencidaPorInactividad(_ultimaActividad, DateTime.now(), minutos: p.minutosInactividad)) {
       if (esAndroid) {
-        ref.read(sesionProvider.notifier).bloquear();
+        // Sin señal y sin PIN configurado, no se expulsa al operador para que pueda seguir trabajando 24/7.
+        ref.read(pinLocalProvider).tienePin(p.id).then((tiene) {
+          if (tiene || ref.read(enLineaProvider)) {
+            ref.read(sesionProvider.notifier).bloquear();
+          } else {
+            _ultimaActividad = DateTime.now();
+          }
+        });
       } else {
         ref.read(sesionProvider.notifier).cerrarSesion(
             mensaje: 'La sesión se cerró tras ${p.minutosInactividad} minutos sin uso. Vuelva a ingresar.');
@@ -127,7 +140,10 @@ class _EstructuraState extends ConsumerState<Estructura> {
     final perfil = ref.watch(perfilProvider);
     if (perfil == null) return const SizedBox.shrink();
     ref.listen<bool>(enLineaProvider, (antes, ahora) {
-      if (ahora && antes == false) ref.read(colaProvider.notifier).sincronizar();
+      if (ahora && antes == false) {
+        ref.read(colaProvider.notifier).sincronizar();
+        ref.read(datosOperadorProvider.notifier).refrescar();
+      }
     });
     final ancho = esAncho(context);
     final entrada = entradaDeRuta(widget.ruta);
@@ -155,7 +171,8 @@ class _EstructuraState extends ConsumerState<Estructura> {
       title: Text(entrada?.nombre ?? 'Inicio', overflow: TextOverflow.ellipsis),
       actions: [
         const _IndicadorConexion(),
-        if (perfil.rol == Rol.operadorCentro) const _IndicadorPendientes(),
+        if (perfil.rol == Rol.operadorCentro || perfil.rol == Rol.superadmin || ref.watch(pendientesSincronizarProvider) > 0)
+          const _IndicadorPendientes(),
         const SizedBox(width: 4),
         _MenuUsuario(),
         const SizedBox(width: 8),

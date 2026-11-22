@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/formato.dart';
 import '../../../core/conexion/conexion.dart';
+import '../../../core/errores/errores.dart';
 import '../../../core/supabase/api.dart';
 import '../../../core/tema/tema.dart';
 import '../../../core/widgets/componentes.dart';
@@ -13,9 +14,20 @@ import '../data/cola_sincronizacion.dart';
 import '../data/repositorio_operaciones_supabase.dart';
 import '../domain/calculos_operaciones.dart';
 
-final pesajesProvider = FutureProvider.autoDispose<List<Fila>>((ref) {
+final pesajesProvider = FutureProvider.autoDispose<List<Fila>>((ref) async {
   ref.watch(pendientesSincronizarProvider);
-  return ref.watch(repositorioOperacionesProvider).pesajes();
+  final enLinea = ref.watch(enLineaProvider);
+  final cache = ref.watch(datosOperadorProvider.select((m) => m['pesajes']));
+  List<Fila> locales() =>
+      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+  if (!enLinea) return locales();
+  try {
+    final remotos = await ref.watch(repositorioOperacionesProvider).pesajes();
+    ref.read(datosOperadorProvider.notifier).guardarClave('pesajes', remotos);
+    return remotos;
+  } catch (_) {
+    return locales();
+  }
 });
 
 /// RF-07 Recepción y báscula: pesaje en 3 pasos con botones grandes y registros pendientes de sincronizar.
@@ -110,7 +122,8 @@ class _BasculaPaginaState extends ConsumerState<BasculaPagina> {
       _pidioDatos = true;
       WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(datosOperadorProvider.notifier).refrescar());
     }
-    final granos = ((datos['granos'] as List?) ?? const []).cast<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+    final granosRaw = ((datos['granos'] as List?) ?? const []).cast<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+    final granos = granosRaw.isEmpty ? granosPredeterminados : granosRaw;
     final productores = ((datos['productores'] as List?) ?? const []).cast<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
     final ordenes = ((datos['ordenes'] as List?) ?? const []).cast<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
     final granoSel = granos.where((g) => g['id'] == _grano).firstOrNull;
@@ -353,9 +366,34 @@ class _BasculaPaginaState extends ConsumerState<BasculaPagina> {
         TextField(controller: m, maxLines: 2, decoration: const InputDecoration(labelText: 'Motivo')),
       ]),
       alGuardar: () => ejecutar(context, () async {
-        await ref.read(repositorioOperacionesProvider).solicitarCorreccion(p['id'], n(b), n(t), n(h), n(i), m.text);
+        if (!ref.read(enLineaProvider)) {
+          await ref.read(colaProvider.notifier).registrar('solicitar_correccion_pesaje', {
+            'pesaje_id': p['id'],
+            'peso_bruto': n(b),
+            'tara': n(t),
+            'humedad': n(h),
+            'impurezas': n(i),
+            'motivo': m.text.trim(),
+          });
+          return true;
+        }
+        try {
+          await ref.read(repositorioOperacionesProvider).solicitarCorreccion(p['id'], n(b), n(t), n(h), n(i), m.text);
+        } on ErrorNegocio catch (e) {
+          if (e.codigo != 'red') rethrow;
+          await ref.read(colaProvider.notifier).registrar('solicitar_correccion_pesaje', {
+            'pesaje_id': p['id'],
+            'peso_bruto': n(b),
+            'tara': n(t),
+            'humedad': n(h),
+            'impurezas': n(i),
+            'motivo': m.text.trim(),
+          });
+        }
         return true;
-      }, exito: 'Corrección enviada a la bandeja del gerente.'),
+      }, exito: ref.read(enLineaProvider)
+          ? 'Corrección enviada a la bandeja del gerente.'
+          : 'Corrección guardada en el teléfono: se enviará al recuperar la señal.'),
     );
   }
 }

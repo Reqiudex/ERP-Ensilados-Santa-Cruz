@@ -39,20 +39,52 @@ class RegistroPendiente {
         'ordenes_ensilado' => 'Apertura de orden de ensilado',
         'consumos_insumo' => 'Consumo de insumo · ${datos['cantidad']}',
         'revisiones_fermentacion' => 'Revisión de fermentación · film ${datos['estado_film']}',
+        'cerrar_orden' => 'Cierre de orden de ensilado · ${datos['rollos']} rollos',
+        'solicitar_correccion_pesaje' => 'Solicitud de corrección de pesaje',
+        'solicitar_merma' => 'Solicitud de baja (merma) · ${datos['cantidad']} rollos',
+        'solicitar_ajuste' => 'Solicitud de ajuste por conteo · ${datos['cantidad']} rollos',
+        'emitir_guia' => 'Emisión de guía de transferencia',
+        'recibir_guia' => 'Confirmación de recepción de guía',
+        'registrar_despacho' => 'Despacho de rollos · placa ${datos['placa']}',
+        'registrar_peso_bascula' => 'Registro de peso en báscula pública · ${datos['peso']} kg',
         _ => tabla,
       };
 }
 
-/// Tablas que admiten registro sin conexión (el resto exige conexión: despachos, guías, ventas y cobros).
-const tablasSinConexion = {'pesajes', 'ordenes_ensilado', 'consumos_insumo', 'revisiones_fermentacion'};
+/// Tablas y operaciones RPC del centro de acopio que admiten registro sin conexión 24/7.
+/// Al reconectar se sincronizan en orden cronológico y de dependencia.
+const tablasSinConexion = {
+  'pesajes',
+  'ordenes_ensilado',
+  'consumos_insumo',
+  'revisiones_fermentacion',
+  'cerrar_orden',
+  'solicitar_correccion_pesaje',
+  'solicitar_merma',
+  'solicitar_ajuste',
+  'emitir_guia',
+  'recibir_guia',
+  'registrar_despacho',
+  'registrar_peso_bascula',
+};
 
-/// Ordena la cola para enviarla: primero lo más antiguo, y las órdenes antes que sus pesajes y consumos.
+/// Ordena la cola para enviarla: primero lo más antiguo, respetando la cadena de dependencias
+/// (apertura de orden → pesajes y consumos → cierre de orden → revisiones, guías, mermas, despachos y báscula).
 List<RegistroPendiente> ordenDeEnvio(List<RegistroPendiente> cola) {
-  int peso(String t) => t == 'ordenes_ensilado' ? 0 : 1;
+  int peso(String t) => switch (t) {
+        'ordenes_ensilado' => 0,
+        'pesajes' || 'consumos_insumo' => 1,
+        'cerrar_orden' => 2,
+        'revisiones_fermentacion' || 'solicitar_correccion_pesaje' => 3,
+        'emitir_guia' || 'recibir_guia' || 'solicitar_merma' || 'solicitar_ajuste' => 4,
+        'registrar_despacho' => 5,
+        'registrar_peso_bascula' => 6,
+        _ => 7,
+      };
   final l = cola.where((r) => !r.rechazado).toList()
     ..sort((a, b) {
-      final c = a.creado.compareTo(b.creado);
-      return c != 0 ? c : peso(a.tabla).compareTo(peso(b.tabla));
+      final p = peso(a.tabla).compareTo(peso(b.tabla));
+      return p != 0 ? p : a.creado.compareTo(b.creado);
     });
   return l;
 }

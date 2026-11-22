@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/formato.dart';
+import '../../../core/conexion/conexion.dart';
 import '../../../core/supabase/api.dart';
 import '../../../core/tema/tema.dart';
 import '../../../core/widgets/componentes.dart';
+import '../../operaciones_ensilado/data/cola_sincronizacion.dart';
 import '../data/repositorio_inventario_supabase.dart';
 
 class FotoStock {
@@ -14,16 +16,39 @@ class FotoStock {
   final int eventos;
 }
 
-/// Stock por sede en tiempo real: cada cambio en existencias llega por Supabase Realtime (StreamProvider)
-/// y la vista se actualiza sin recargar (RNF: visible en otra sede en 3 s o menos).
+/// Stock por sede en tiempo real con respaldo local sin conexión en SQLite.
 final stockEnVivoProvider = StreamProvider.autoDispose<FotoStock>((ref) async* {
   final repo = ref.watch(repositorioInventarioProvider);
-  var eventos = 0;
-  yield FotoStock(await repo.existencias(), DateTime.now(), eventos);
-  await for (final _ in repo.existenciasEnVivo()) {
-    eventos++;
-    yield FotoStock(await repo.existencias(), DateTime.now(), eventos);
+  final enLinea = ref.watch(enLineaProvider);
+  final cache = ref.watch(datosOperadorProvider.select((m) => m['existencias']));
+  List<Fila> locales() =>
+      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+
+  if (!enLinea) {
+    yield FotoStock(locales(), DateTime.now(), 0);
+    return;
   }
+
+  var eventos = 0;
+  try {
+    final inicial = await repo.existencias();
+    ref.read(datosOperadorProvider.notifier).guardarClave('existencias', inicial);
+    yield FotoStock(inicial, DateTime.now(), eventos);
+  } catch (_) {
+    yield FotoStock(locales(), DateTime.now(), eventos);
+    return;
+  }
+
+  try {
+    await for (final _ in repo.existenciasEnVivo()) {
+      eventos++;
+      try {
+        final act = await repo.existencias();
+        ref.read(datosOperadorProvider.notifier).guardarClave('existencias', act);
+        yield FotoStock(act, DateTime.now(), eventos);
+      } catch (_) {}
+    }
+  } catch (_) {}
 });
 
 /// RF-12 Gestión multisede.

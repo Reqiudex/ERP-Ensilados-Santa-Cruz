@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/config/formato.dart';
+import '../../../core/conexion/conexion.dart';
 import '../../../core/router/menu.dart';
 import '../../../core/supabase/api.dart';
 import '../../../core/tema/tema.dart';
@@ -11,12 +12,28 @@ import '../../operaciones_ensilado/data/cola_sincronizacion.dart';
 import '../domain/roles_y_permisos.dart';
 import 'sesion.dart';
 
-/// Indicadores del tablero de inicio según el rol.
+/// Indicadores del tablero de inicio según el rol (con respaldo local sin conexión en Android).
 final indicadoresInicioProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
   final perfil = ref.watch(perfilProvider);
   final api = ref.watch(apiProvider);
+  final enLinea = ref.watch(enLineaProvider);
+  final cache = ref.watch(datosOperadorProvider);
   if (perfil == null) return {};
-  final r = <String, dynamic>{};
+
+  Map<String, dynamic> desdeCache() => {
+        'ordenes': (cache['ordenes_lista'] as List?)?.where((o) => o is Map && o['estado'] == 'abierta').toList() ??
+            (cache['ordenes'] as List?) ??
+            const [],
+        'lotes': (cache['lotes_fermentacion'] as List?) ?? (cache['lotes_stock'] as List?) ?? const [],
+        'guias': (cache['guias'] as List?)?.where((g) => g is Map && g['estado'] == 'en_transito').toList() ?? const [],
+        'despachos': (cache['despachos_pendientes'] as List?) ?? const [],
+        'existencias': (cache['existencias'] as List?) ?? const [],
+        ...(cache['indicadores_inicio'] is Map ? Map<String, dynamic>.from(cache['indicadores_inicio'] as Map) : const {}),
+      };
+
+  if (!enLinea) return desdeCache();
+
+  final r = desdeCache();
   Future<void> intentar(Future<void> Function() f) async {
     try {
       await f();
@@ -44,6 +61,7 @@ final indicadoresInicioProvider = FutureProvider.autoDispose<Map<String, dynamic
         await intentar(() async => r['rendimiento'] = await api.rpcLista('reporte_rendimiento'));
       }
   }
+  ref.read(datosOperadorProvider.notifier).guardarClave('indicadores_inicio', r);
   return r;
 });
 
@@ -163,7 +181,20 @@ class _Indicadores extends ConsumerWidget {
   }
 }
 
-final misSolicitudesProvider = FutureProvider.autoDispose<List<Fila>>((ref) => ref.watch(apiProvider).rpcLista('mis_solicitudes'));
+final misSolicitudesProvider = FutureProvider.autoDispose<List<Fila>>((ref) async {
+  final enLinea = ref.watch(enLineaProvider);
+  final cache = ref.watch(datosOperadorProvider.select((m) => m['mis_solicitudes']));
+  List<Fila> locales() =>
+      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+  if (!enLinea) return locales();
+  try {
+    final l = await ref.watch(apiProvider).rpcLista('mis_solicitudes');
+    ref.read(datosOperadorProvider.notifier).guardarClave('mis_solicitudes', l);
+    return l;
+  } catch (_) {
+    return locales();
+  }
+});
 
 /// Seguimiento de las solicitudes que registró el usuario (para cualquier rol).
 class MisSolicitudesPagina extends ConsumerWidget {

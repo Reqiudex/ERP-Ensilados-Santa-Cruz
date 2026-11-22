@@ -2,14 +2,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/formato.dart';
+import '../../../core/conexion/conexion.dart';
+import '../../../core/errores/errores.dart';
 import '../../../core/supabase/api.dart';
 import '../../../core/tema/tema.dart';
 import '../../../core/widgets/componentes.dart';
+import '../../operaciones_ensilado/data/cola_sincronizacion.dart';
 import '../../seguridad_accesos/domain/roles_y_permisos.dart';
 import '../../seguridad_accesos/presentation/sesion.dart';
 import '../data/repositorio_inventario_supabase.dart';
 
-final lotesProvider = FutureProvider.autoDispose<List<Fila>>((ref) => ref.watch(repositorioInventarioProvider).lotes());
+final lotesProvider = FutureProvider.autoDispose<List<Fila>>((ref) async {
+  ref.watch(pendientesSincronizarProvider);
+  final enLinea = ref.watch(enLineaProvider);
+  final cache = ref.watch(datosOperadorProvider.select((m) => m['lotes_stock']));
+  List<Fila> locales() =>
+      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+  if (!enLinea) return locales();
+  try {
+    final l = await ref.watch(repositorioInventarioProvider).lotes();
+    ref.read(datosOperadorProvider.notifier).guardarClave('lotes_stock', l);
+    return l;
+  } catch (_) {
+    return locales();
+  }
+});
 
 double _total(Fila l, String campo, {String? sede}) => ((l['existencias'] as List?) ?? const [])
     .where((e) => sede == null || e['sede_id'] == sede)
@@ -102,9 +119,31 @@ class _StockLotesPaginaState extends ConsumerState<StockLotesPagina> {
         TextField(controller: desc, maxLines: 3, decoration: const InputDecoration(labelText: 'Descripción (obligatoria)')),
       ]),
       alGuardar: () => ejecutar(context, () async {
-        await ref.read(repositorioInventarioProvider).solicitarMerma(x['id'], int.tryParse(cant.text) ?? 0, causa, desc.text);
+        final n = int.tryParse(cant.text) ?? 0;
+        if (!ref.read(enLineaProvider)) {
+          await ref.read(colaProvider.notifier).registrar('solicitar_merma', {
+            'lote_id': x['id'],
+            'cantidad': n,
+            'causa': causa,
+            'descripcion': desc.text.trim(),
+          });
+          return true;
+        }
+        try {
+          await ref.read(repositorioInventarioProvider).solicitarMerma(x['id'], n, causa, desc.text);
+        } on ErrorNegocio catch (e) {
+          if (e.codigo != 'red') rethrow;
+          await ref.read(colaProvider.notifier).registrar('solicitar_merma', {
+            'lote_id': x['id'],
+            'cantidad': n,
+            'causa': causa,
+            'descripcion': desc.text.trim(),
+          });
+        }
         return true;
-      }, exito: 'Baja solicitada: el stock no cambia hasta que el gerente la apruebe.'),
+      }, exito: ref.read(enLineaProvider)
+          ? 'Baja solicitada: el stock no cambia hasta que el gerente la apruebe.'
+          : 'Solicitud de baja guardada en el teléfono: se enviará al recuperar la señal.'),
     );
   }
 
@@ -122,10 +161,37 @@ class _StockLotesPaginaState extends ConsumerState<StockLotesPagina> {
         TextField(controller: desc, maxLines: 3, decoration: const InputDecoration(labelText: 'Descripción del conteo')),
       ]),
       alGuardar: () => ejecutar(context, () async {
-        final prod = (await ref.read(apiProvider).consultar('lotes', 'producto_id', igual: {'id': x['id']})).first['producto_id'] as String;
-        await ref.read(repositorioInventarioProvider).solicitarAjuste(prod, x['id'], aNumero(cant.text), desc.text);
+        String? prod = (x['producto_id'] as String?) ?? (x['productos'] is Map ? (x['productos'] as Map)['id'] as String? : null);
+        if (prod == null && ref.read(enLineaProvider)) {
+          try {
+            prod = (await ref.read(apiProvider).consultar('lotes', 'producto_id', igual: {'id': x['id']})).first['producto_id'] as String;
+          } catch (_) {}
+        }
+        prod ??= 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+        if (!ref.read(enLineaProvider)) {
+          await ref.read(colaProvider.notifier).registrar('solicitar_ajuste', {
+            'producto_id': prod,
+            'lote_id': x['id'],
+            'cantidad': aNumero(cant.text),
+            'descripcion': desc.text.trim(),
+          });
+          return true;
+        }
+        try {
+          await ref.read(repositorioInventarioProvider).solicitarAjuste(prod, x['id'], aNumero(cant.text), desc.text);
+        } on ErrorNegocio catch (e) {
+          if (e.codigo != 'red') rethrow;
+          await ref.read(colaProvider.notifier).registrar('solicitar_ajuste', {
+            'producto_id': prod,
+            'lote_id': x['id'],
+            'cantidad': aNumero(cant.text),
+            'descripcion': desc.text.trim(),
+          });
+        }
         return true;
-      }, exito: 'Ajuste solicitado al gerente.'),
+      }, exito: ref.read(enLineaProvider)
+          ? 'Ajuste solicitado al gerente.'
+          : 'Ajuste guardado en el teléfono: se enviará al recuperar la señal.'),
     );
   }
 
@@ -137,7 +203,11 @@ class _StockLotesPaginaState extends ConsumerState<StockLotesPagina> {
         content: SizedBox(
           width: 640,
           child: FutureBuilder<Fila>(
-            future: ref.read(repositorioInventarioProvider).trazabilidad(x['id']),
+            future: ref.read(repositorioInventarioProvider).trazabilidad(x['id']).catchError((_) => <String, dynamic>{
+                  'lote': x,
+                  'movimientos': const <Fila>[],
+                  'revisiones': const <Fila>[],
+                }),
             builder: (c, s) {
               if (!s.hasData) return const SizedBox(height: 120, child: Center(child: CircularProgressIndicator()));
               final d = s.data!;

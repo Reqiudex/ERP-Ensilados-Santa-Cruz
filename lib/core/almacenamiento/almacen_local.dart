@@ -43,10 +43,14 @@ class AlmacenSeguro {
       valor == null ? _memoria.remove(clave) : _memoria[clave] = valor;
       return;
     }
-    if (valor == null) {
-      await _s.delete(key: clave);
-    } else {
-      await _s.write(key: clave, value: valor);
+    try {
+      if (valor == null) {
+        await _s.delete(key: clave);
+      } else {
+        await _s.write(key: clave, value: valor);
+      }
+    } catch (_) {
+      valor == null ? _memoria.remove(clave) : _memoria[clave] = valor;
     }
   }
 }

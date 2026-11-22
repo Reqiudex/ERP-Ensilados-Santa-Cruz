@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +15,33 @@ class ModoSinRed extends Notifier<bool> {
 
 final modoSinRedProvider = NotifierProvider<ModoSinRed, bool>(ModoSinRed.new);
 
+/// Si una petición falla por red aunque el teléfono tenga Wi-Fi o datos encendidos (sin internet real),
+/// se marca temporalmente sin alcance al servidor y se reintenta sola al volver la señal.
+class AlcanceServidor extends Notifier<bool> {
+  Timer? _reintento;
+
+  @override
+  bool build() {
+    ref.onDispose(() => _reintento?.cancel());
+    return true;
+  }
+
+  void marcarEnLinea() {
+    _reintento?.cancel();
+    if (!state) state = true;
+  }
+
+  void marcarCaido() {
+    if (state) state = false;
+    _reintento?.cancel();
+    _reintento = Timer(const Duration(seconds: 12), () {
+      state = true;
+    });
+  }
+}
+
+final alcanceServidorProvider = NotifierProvider<AlcanceServidor, bool>(AlcanceServidor.new);
+
 /// Estado de la red del dispositivo.
 final redProvider = StreamProvider<bool>((ref) async* {
   if (kIsWeb) {
@@ -21,13 +50,19 @@ final redProvider = StreamProvider<bool>((ref) async* {
   }
   final c = Connectivity();
   bool hay(List<ConnectivityResult> r) => r.any((x) => x != ConnectivityResult.none);
-  yield hay(await c.checkConnectivity());
-  yield* c.onConnectivityChanged.map(hay);
+  final inicial = hay(await c.checkConnectivity());
+  if (inicial) ref.read(alcanceServidorProvider.notifier).marcarEnLinea();
+  yield inicial;
+  await for (final cambio in c.onConnectivityChanged.map(hay)) {
+    if (cambio) ref.read(alcanceServidorProvider.notifier).marcarEnLinea();
+    yield cambio;
+  }
 });
 
-/// En línea = hay red y no se está simulando el modo avión.
+/// En línea = hay red, no se está simulando el modo avión y el servidor responde.
 final enLineaProvider = Provider<bool>((ref) {
   if (ref.watch(modoSinRedProvider)) return false;
+  if (!ref.watch(alcanceServidorProvider)) return false;
   return ref.watch(redProvider).value ?? true;
 });
 

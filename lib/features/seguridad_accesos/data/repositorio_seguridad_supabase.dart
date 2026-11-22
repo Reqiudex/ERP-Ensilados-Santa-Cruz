@@ -20,13 +20,19 @@ class RepositorioSeguridadSupabase implements RepositorioSeguridad {
     try {
       await _auth.signInWithPassword(email: correo, password: clave);
     } on AuthException catch (e) {
-      final red = e.message.toLowerCase().contains('socket') || e.message.toLowerCase().contains('network');
-      if (red) throw const ErrorNegocio('Sin conexión con el servidor. Revise su internet e intente de nuevo.', codigo: 'red');
+      if (esErrorRed(e, e.message)) {
+        throw const ErrorNegocio('Sin conexión con el servidor. Revise su internet e intente de nuevo.', codigo: 'red');
+      }
       try {
         await _api.rpc('registrar_intento_fallido', {'p_identificador': id});
       } catch (_) {}
       // Mismo mensaje exista o no la cuenta (no revela qué CI o correo están registrados).
       throw const ErrorNegocio('Credenciales incorrectas o cuenta bloqueada temporalmente.');
+    } catch (e) {
+      if (esErrorRed(e)) {
+        throw const ErrorNegocio('Sin conexión con el servidor. Revise su internet e intente de nuevo.', codigo: 'red');
+      }
+      rethrow;
     }
     try {
       return Perfil.desdeJson(await _api.rpc('registrar_ingreso'));
