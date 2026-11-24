@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/formato.dart';
-import '../../../core/conexion/conexion.dart';
 import '../../../core/supabase/api.dart';
 import '../../../core/tema/tema.dart';
 import '../../../core/widgets/componentes.dart';
@@ -115,18 +114,8 @@ class Barras extends StatelessWidget {
 // RF-20 Rendimiento y producción de ensilado
 // ------------------------------------------------------------------------------------------------
 final _rendimientoProvider = FutureProvider.autoDispose.family<List<Fila>, Periodo>((ref, p) async {
-  final enLinea = ref.watch(enLineaProvider);
-  final cache = ref.watch(datosOperadorProvider.select((m) => m['reporte_rendimiento']));
-  List<Fila> locales() =>
-      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
-  if (!enLinea) return locales();
-  try {
-    final l = await ref.watch(repositorioReportesProvider).rendimiento(p.desde, p.hasta);
-    ref.read(datosOperadorProvider.notifier).guardarClave('reporte_rendimiento', l);
-    return l;
-  } catch (_) {
-    return locales();
-  }
+  final repo = ref.watch(repositorioReportesProvider);
+  return consultarConCopiaLocal(ref, 'reporte_rendimiento', remoto: () => repo.rendimiento(p.desde, p.hasta), local: filasDeCopia);
 });
 
 class ReporteRendimientoPagina extends ConsumerStatefulWidget {
@@ -198,32 +187,12 @@ class _ReporteRendimientoPaginaState extends ConsumerState<ReporteRendimientoPag
 // RF-21 Existencias y rotación por sede
 // ------------------------------------------------------------------------------------------------
 final _existenciasProvider = FutureProvider.autoDispose<List<Fila>>((ref) async {
-  final enLinea = ref.watch(enLineaProvider);
-  final cache = ref.watch(datosOperadorProvider.select((m) => m['existencias']));
-  List<Fila> locales() =>
-      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
-  if (!enLinea) return locales();
-  try {
-    final l = await ref.watch(repositorioReportesProvider).existencias();
-    ref.read(datosOperadorProvider.notifier).guardarClave('existencias', l);
-    return l;
-  } catch (_) {
-    return locales();
-  }
+  final repo = ref.watch(repositorioReportesProvider);
+  return consultarConCopiaLocal(ref, 'existencias', remoto: () => repo.existencias(), local: filasDeCopia);
 });
 final _rotacionProvider = FutureProvider.autoDispose.family<List<Fila>, Periodo>((ref, p) async {
-  final enLinea = ref.watch(enLineaProvider);
-  final cache = ref.watch(datosOperadorProvider.select((m) => m['reporte_rotacion']));
-  List<Fila> locales() =>
-      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
-  if (!enLinea) return locales();
-  try {
-    final l = await ref.watch(repositorioReportesProvider).rotacion(p.desde, p.hasta);
-    ref.read(datosOperadorProvider.notifier).guardarClave('reporte_rotacion', l);
-    return l;
-  } catch (_) {
-    return locales();
-  }
+  final repo = ref.watch(repositorioReportesProvider);
+  return consultarConCopiaLocal(ref, 'reporte_rotacion', remoto: () => repo.rotacion(p.desde, p.hasta), local: filasDeCopia);
 });
 
 class ReporteExistenciasPagina extends ConsumerStatefulWidget {
@@ -405,17 +374,10 @@ class _ReporteVentasPaginaState extends ConsumerState<ReporteVentasPagina> {
 // RF-23 Histórico de pérdidas y merma
 // ------------------------------------------------------------------------------------------------
 final _mermasProvider = FutureProvider.autoDispose.family<Fila, Periodo>((ref, p) async {
-  final enLinea = ref.watch(enLineaProvider);
-  final cache = ref.watch(datosOperadorProvider.select((m) => m['reporte_mermas']));
-  Fila locales() => cache is Map ? Map<String, dynamic>.from(cache) : const {'bajas': <Fila>[], 'por_sede': <Fila>[]};
-  if (!enLinea) return locales();
-  try {
-    final d = await ref.watch(repositorioReportesProvider).mermas(p.desde, p.hasta);
-    ref.read(datosOperadorProvider.notifier).guardarClave('reporte_mermas', d);
-    return d;
-  } catch (_) {
-    return locales();
-  }
+  final repo = ref.watch(repositorioReportesProvider);
+  return consultarConCopiaLocal<Fila>(ref, 'reporte_mermas',
+      remoto: () => repo.mermas(p.desde, p.hasta),
+      local: (c) => c is Map ? Map<String, dynamic>.from(c) : <String, dynamic>{'bajas': <Fila>[], 'por_sede': <Fila>[]});
 });
 
 class ReporteMermasPagina extends ConsumerStatefulWidget {

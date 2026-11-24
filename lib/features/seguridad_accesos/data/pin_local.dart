@@ -48,20 +48,42 @@ class PinLocal {
     await _almacen.escribir('clave_usuario', perfil.id);
     await _almacen.escribir('clave_correo', perfil.correo.toLowerCase());
     await _almacen.escribir('clave_ci', perfil.ci.trim());
+    await _almacen.escribir('clave_intentos', '0');
   }
 
+  /// Intentos de contraseña sin conexión antes de borrar la credencial local y exigir el ingreso en línea.
+  static const intentosOfflineMaximos = 5;
+
   /// Verifica el identificador (CI o correo) y la contraseña contra el caché local cuando no hay señal.
+  /// Tras [intentosOfflineMaximos] errores seguidos la credencial local se borra.
   Future<Perfil?> verificarCredencialesOffline(String identificador, String clave) async {
     final id = identificador.trim().toLowerCase();
     if (id.isEmpty || clave.isEmpty) return null;
     final guardado = await perfilGuardado();
     if (guardado == null) return null;
+    final hash = await _almacen.leer('clave_resumen');
+    if (hash == null) return null;
     final correo = (await _almacen.leer('clave_correo')) ?? guardado.correo.toLowerCase();
     final ci = (await _almacen.leer('clave_ci')) ?? guardado.ci.trim();
-    if (id != correo && id != ci) return null;
-    final hash = await _almacen.leer('clave_resumen');
-    if (hash == null || !_seguridad.verificarCredencial(clave, hash)) return null;
+    if ((id != correo && id != ci) || !_seguridad.verificarCredencial(clave, hash)) {
+      final n = (int.tryParse(await _almacen.leer('clave_intentos') ?? '0') ?? 0) + 1;
+      if (n >= intentosOfflineMaximos) {
+        await borrarCredencialesOffline();
+      } else {
+        await _almacen.escribir('clave_intentos', '$n');
+      }
+      return null;
+    }
+    await _almacen.escribir('clave_intentos', '0');
     return guardado;
+  }
+
+  /// Borra la contraseña guardada para ingresar sin señal (cuenta suspendida, clave cambiada o intentos agotados).
+  /// Los registros pendientes de la cola NO se borran.
+  Future<void> borrarCredencialesOffline() async {
+    for (final k in ['clave_resumen', 'clave_usuario', 'clave_correo', 'clave_ci', 'clave_intentos']) {
+      await _almacen.escribir(k, null);
+    }
   }
 
   Future<void> marcarSincronizado() => _almacen.escribir('ultima_sync', DateTime.now().toIso8601String());

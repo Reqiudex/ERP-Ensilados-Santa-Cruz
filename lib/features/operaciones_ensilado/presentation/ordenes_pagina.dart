@@ -15,18 +15,8 @@ import '../data/repositorio_operaciones_supabase.dart';
 
 final ordenesProvider = FutureProvider.autoDispose<List<Fila>>((ref) async {
   ref.watch(pendientesSincronizarProvider);
-  final enLinea = ref.watch(enLineaProvider);
-  final cache = ref.watch(datosOperadorProvider.select((m) => m['ordenes_lista']));
-  List<Fila> locales() =>
-      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
-  if (!enLinea) return locales();
-  try {
-    final l = await ref.watch(repositorioOperacionesProvider).ordenes();
-    ref.read(datosOperadorProvider.notifier).guardarClave('ordenes_lista', l);
-    return l;
-  } catch (_) {
-    return locales();
-  }
+  final repo = ref.watch(repositorioOperacionesProvider);
+  return consultarConCopiaLocal(ref, 'ordenes_lista', remoto: () => repo.ordenes(), local: filasDeCopia);
 });
 
 /// El lote de una orden llega como objeto (relación uno a uno) o como lista según la consulta.
@@ -213,7 +203,7 @@ class OrdenesPagina extends ConsumerWidget {
         try {
           return await ref.read(repositorioOperacionesProvider).cerrarOrden(o['id'], rollos);
         } on ErrorNegocio catch (e) {
-          if (e.codigo == 'red') return await encolarLocal();
+          if (esErrorPasajero(e)) return await encolarLocal();
           rethrow;
         }
       }),

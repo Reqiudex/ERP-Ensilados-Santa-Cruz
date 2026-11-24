@@ -23,21 +23,61 @@ jobs:
       - name: Verificar confirmación y aprobación
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          # Las entradas llegan como variables de entorno, nunca pegadas en el script ni en el SQL.
+          SOLICITUD: ${{ inputs.solicitud }}
+          EJECUCION: ${{ inputs.ejecucion }}
+          CONFIRMAR: ${{ inputs.confirmar }}
         run: |
-          [ "${{ inputs.confirmar }}" = "RESTAURAR" ] || { echo "Confirmación incorrecta"; exit 1; }
-          estado=$(docker run --rm postgres:17 psql "$SUPABASE_DB_URL" -At -c "select estado from public.solicitudes_aprobacion where id = '${{ inputs.solicitud }}' and tipo = 'restauracion' and aprobado_por is not null and aprobado_por <> registrado_por")
+          [ "$CONFIRMAR" = "RESTAURAR" ] || { echo "Confirmación incorrecta"; exit 1; }
+          [[ "$SOLICITUD" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] || { echo "ID de solicitud no válido"; exit 1; }
+          [[ "$EJECUCION" =~ ^[0-9]+$ ]] || { echo "ID de ejecución no válido"; exit 1; }
+          estado=$(docker run --rm postgres:17 psql "$SUPABASE_DB_URL" -At -v sol="$SOLICITUD" <<'SQL'
+          select estado from public.solicitudes_aprobacion
+           where id = :'sol' and tipo = 'restauracion' and aprobado_por is not null and aprobado_por <> registrado_por;
+          SQL
+          )
           echo "Estado de la solicitud: $estado"
           [ "$estado" = "aprobada" ] || { echo "La restauración no está aprobada por el gerente"; exit 1; }
+          # Una aprobación sirve para una sola restauración.
+          usadas=$(docker run --rm postgres:17 psql "$SUPABASE_DB_URL" -At -v sol="$SOLICITUD" <<'SQL'
+          select count(*) from public.bitacora_eventos
+           where accion = 'restauracion' and registro_id = :'sol' and datos_despues ->> 'estado' = 'ejecutada';
+          SQL
+          )
+          [ "$usadas" = "0" ] || { echo "Esta aprobación ya se usó para una restauración"; exit 1; }
       - uses: actions/download-artifact@v4
         with:
           run-id: ${{ inputs.ejecucion }}
           github-token: ${{ github.token }}
           path: respaldo
-      - name: Comprobar SHA-256 y restaurar
+      - name: Comprobar SHA-256, descifrar y restaurar
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          RESPALDO_CLAVE: ${{ secrets.RESPALDO_CLAVE }}
+          SOLICITUD: ${{ inputs.solicitud }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           cd respaldo/*/ && sha256sum -c *.sha256
-          archivo=$(ls *.dump)
+          archivo=$(ls *.dump.gpg 2>/dev/null || ls *.dump)
+          [ -n "$RESPALDO_CLAVE" ] || { echo "Falta el Secret RESPALDO_CLAVE (descifra el respaldo y cifra la bitácora previa)"; exit 1; }
+          if [[ "$archivo" == *.gpg ]]; then
+            gpg --batch --yes --pinentry-mode loopback --passphrase "$RESPALDO_CLAVE" --decrypt --output "${archivo%.gpg}" "$archivo"
+            archivo="${archivo%.gpg}"
+          fi
+          # Atención: pg_restore --clean reemplaza también la bitácora por la del respaldo. Se conserva aparte la
+          # bitácora actual para no perder el rastro de lo ocurrido después del respaldo.
+          docker run --rm -v "$PWD:/r" postgres:17 pg_dump "$SUPABASE_DB_URL" --format=custom --data-only \
+            --table=public.bitacora_eventos --file=/r/bitacora_previa.dump
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$RESPALDO_CLAVE" --symmetric --cipher-algo AES256 \
+            --output bitacora_previa.dump.gpg bitacora_previa.dump && rm -f bitacora_previa.dump
           docker run --rm -v "$PWD:/r" postgres:17 pg_restore --dbname="$SUPABASE_DB_URL" --clean --if-exists --no-owner --no-privileges --single-transaction "/r/$archivo"
-          docker run --rm postgres:17 psql "$SUPABASE_DB_URL" -c "insert into public.bitacora_eventos (accion, tabla, registro_id, datos_despues) values ('restauracion', 'respaldos', '${{ inputs.solicitud }}', jsonb_build_object('archivo', '$archivo', 'estado', 'ejecutada', 'ejecucion', '${{ github.run_id }}'))"
+          docker run --rm postgres:17 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v sol="$SOLICITUD" -v archivo="$archivo" -v run="$RUN_ID" <<'SQL'
+          insert into public.bitacora_eventos (accion, tabla, registro_id, datos_despues)
+          values ('restauracion', 'respaldos', :'sol'::uuid,
+                  jsonb_build_object('archivo', :'archivo', 'estado', 'ejecutada', 'ejecucion', :'run'));
+          SQL
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bitacora-previa-${{ github.run_id }}
+          path: respaldo/*/bitacora_previa.dump.gpg
+          retention-days: 30

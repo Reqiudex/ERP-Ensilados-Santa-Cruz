@@ -14,38 +14,32 @@ import '../domain/calculos_operaciones.dart';
 import 'ordenes_pagina.dart';
 
 final insumosProvider = FutureProvider.autoDispose<List<Fila>>((ref) async {
-  final enLinea = ref.watch(enLineaProvider);
-  final cache = ref.watch(datosOperadorProvider.select((m) => m['insumos']));
-  List<Fila> locales() =>
-      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
-  if (!enLinea) return locales();
-  try {
-    final l = await ref.watch(repositorioOperacionesProvider).insumosDisponibles();
-    ref.read(datosOperadorProvider.notifier).guardarClave('insumos', l);
-    return l;
-  } catch (_) {
-    return locales();
-  }
+  final repo = ref.watch(repositorioOperacionesProvider);
+  return consultarConCopiaLocal(ref, 'insumos', remoto: () => repo.insumosDisponibles(), local: filasDeCopia);
 });
 
 final consumosProvider = FutureProvider.autoDispose.family<List<Fila>, String>((ref, orden) async {
   ref.watch(pendientesSincronizarProvider);
-  final enLinea = ref.watch(enLineaProvider);
-  final mapa = ref.watch(datosOperadorProvider.select((m) => m['consumos_por_orden']));
-  List<Fila> locales() {
-    final l = (mapa is Map ? mapa[orden] : null) as List?;
-    return (l ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+  List<Fila> deMapa(Object? mapa) => filasDeCopia(mapa is Map ? mapa[orden] : null);
+  // Sin señal se observa la copia local; con señal se consulta el servidor sin observarla (evita recargas sin fin).
+  if (!ref.watch(enLineaProvider)) {
+    return deMapa(ref.watch(datosOperadorProvider.select((m) => m['consumos_por_orden'])));
   }
-
-  if (!enLinea) return locales();
+  final repo = ref.watch(repositorioOperacionesProvider);
   try {
-    final l = await ref.watch(repositorioOperacionesProvider).consumos(orden);
-    final actual = Map<String, dynamic>.from((ref.read(datosOperadorProvider)['consumos_por_orden'] as Map?) ?? const {});
-    actual[orden] = l;
-    ref.read(datosOperadorProvider.notifier).guardarClave('consumos_por_orden', actual);
+    final l = await repo.consumos(orden);
+    try {
+      final actual = Map<String, dynamic>.from((ref.read(datosOperadorProvider)['consumos_por_orden'] as Map?) ?? const {});
+      actual[orden] = l;
+      ref.read(datosOperadorProvider.notifier).guardarClave('consumos_por_orden', actual);
+    } catch (_) {}
     return l;
   } catch (_) {
-    return locales();
+    try {
+      return deMapa(ref.read(datosOperadorProvider)['consumos_por_orden']);
+    } catch (_) {
+      return const <Fila>[];
+    }
   }
 });
 

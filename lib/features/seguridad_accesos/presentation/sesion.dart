@@ -31,8 +31,12 @@ class SesionControlador extends AsyncNotifier<EstadoSesion> {
       if (!esAndroid) return const EstadoSesion();
       final guardado = await pin.perfilGuardado();
       if (guardado == null) return const EstadoSesion();
-      final conPin = await pin.tienePin(guardado.id);
-      return EstadoSesion(perfil: guardado, bloqueadaPorPin: conPin, sinConexion: true);
+      // Con PIN se pide el PIN; sin PIN se pide la contraseña (se verifica contra la copia local). Nunca se entra
+      // sin credencial: antes la app abría sola la última sesión al arrancar sin señal.
+      if (await pin.tienePin(guardado.id)) {
+        return EstadoSesion(perfil: guardado, bloqueadaPorPin: true, sinConexion: true);
+      }
+      return const EstadoSesion(sinConexion: true, mensaje: 'Sin señal: ingrese con su CI o correo y su contraseña.');
     }
 
     if (!enLinea && esAndroid) {
@@ -50,8 +54,8 @@ class SesionControlador extends AsyncNotifier<EstadoSesion> {
       }
       return const EstadoSesion();
     } on ErrorNegocio catch (e) {
-      // Android sin señal o sesión expirada estando sin señal: recupera el perfil del operador en el dispositivo.
-      if (esAndroid && (e.codigo == 'red' || !ref.read(enLineaProvider))) {
+      // Android sin señal, servidor sin respuesta o sesión por renovar: recupera el perfil del operador en el dispositivo.
+      if (esAndroid && (esErrorPasajero(e) || !ref.read(enLineaProvider))) {
         return await respaldoLocal();
       }
       return const EstadoSesion();
@@ -68,13 +72,15 @@ class SesionControlador extends AsyncNotifier<EstadoSesion> {
       if (esAndroid) await pin.guardarCredencialesOffline(p, clave);
       state = AsyncData(EstadoSesion(perfil: p));
     } on ErrorNegocio catch (e) {
-      if (esAndroid && (e.codigo == 'red' || !ref.read(enLineaProvider))) {
+      if (esAndroid && (e.codigo == 'red' || e.codigo == 'servidor' || !ref.read(enLineaProvider))) {
         final local = await pin.verificarCredencialesOffline(identificador, clave);
         if (local != null) {
           state = AsyncData(EstadoSesion(perfil: local, sinConexion: true));
           return;
         }
       }
+      // El servidor dijo que la cuenta no está activa: el teléfono deja de aceptar su contraseña sin señal.
+      if (esAndroid && e.prohibido) await pin.borrarCredencialesOffline();
       rethrow;
     }
   }

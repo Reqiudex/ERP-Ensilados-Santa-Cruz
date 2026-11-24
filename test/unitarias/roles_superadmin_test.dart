@@ -27,4 +27,13 @@ void main() {
     expect(Submodulo.bascula.permitido(Rol.adminSistema), isFalse); // el administrador no tiene permisos de negocio
     expect(Submodulo.politicas.permitido(Rol.gerenteGeneral), isFalse);
   });
+
+  test('La matriz de permisos (RBAC) solo la ven el administrador, el gerente y el superadministrador', () {
+    expect(Submodulo.rbac.permitido(Rol.adminSistema), isTrue);
+    expect(Submodulo.rbac.permitido(Rol.gerenteGeneral), isTrue);
+    expect(Submodulo.rbac.permitido(Rol.superadmin), isTrue);
+    for (final r in [Rol.operadorCentro, Rol.ejecutivoComercial, Rol.cajeroContador]) {
+      expect(Submodulo.rbac.permitido(r), isFalse, reason: r.name);
+    }
+  });
 }

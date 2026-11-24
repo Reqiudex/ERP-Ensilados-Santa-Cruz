@@ -27,7 +27,7 @@ Contraseña de todas: `Ensilados2026!` · Se ingresa con el correo o con el CI.
 
 | Módulo (`lib/features/…`) | Submódulos |
 |---|---|
-| Seguridad y Accesos (`seguridad_accesos`) | Usuarios · RBAC y bandeja de aprobaciones · Políticas de contraseñas · Autenticación y sesiones (PIN sin conexión) · Bitácora · Mantenimiento de la base de datos |
+| Seguridad y Accesos (`seguridad_accesos`) | Usuarios · RBAC (administrador y gerente) y bandeja de aprobaciones · Políticas de contraseñas · Autenticación y sesiones (PIN sin conexión) · Bitácora · Mantenimiento de la base de datos |
 | Operaciones y Procesamiento (`operaciones_ensilado`) | Recepción y báscula · Orden de ensilado · Consumo de insumos · Fermentación y calidad |
 | Inventario y Logística (`inventario_multisede`) | Stock por lotes y trazabilidad · Gestión multisede · Catálogo · Guías de transferencia |
 | Comercial y Abastecimiento (`comercial_abastecimiento`) | Clientes y proveedores · Compras y pagos · Cotización y pedidos · Facturación y ventas · Despachos |
@@ -49,8 +49,9 @@ políticas RLS y las funciones del servidor. Ninguna clave secreta está en el r
 ## Base de datos
 
 1. Aplicar las migraciones de `supabase/migrations/` en orden (`supabase db push`).
-2. Cargar los datos de demostración: `supabase/seed.sql`.
-3. `supabase/reiniciar_demo.sql` vuelve los datos al estado inicial.
+2. Solo en una base nueva: cargar los catálogos mínimos `supabase/catalogos_base.sql`.
+3. Cargar los datos de demostración: `supabase/seed.sql`.
+4. `supabase/reiniciar_demo.sql` vuelve los datos al estado inicial.
 
 ## Pruebas
 
@@ -72,7 +73,7 @@ Los informes quedan en `build/informes/`.
 | `restauracion.yml` | Restaura un respaldo aprobado por el gerente |
 | `reiniciar-demo.yml` | Recarga los datos de demostración |
 
-Secret necesario para respaldo, restauración, reinicio y auditoría SQL: `SUPABASE_DB_URL` (Supabase → Connect → Session pooler).
+Secrets: `SUPABASE_DB_URL` (respaldo, restauración, reinicio y auditoría SQL; Supabase → Connect → Session pooler), `RESPALDO_CLAVE` (cifra los respaldos) y `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` (firma estable del APK).
 
 ## Estructura
 

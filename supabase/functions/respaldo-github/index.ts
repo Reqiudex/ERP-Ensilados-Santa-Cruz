@@ -75,7 +75,13 @@ Deno.serve(async (req) => {
   const huella = await sha256(texto);
 
   try {
-    // 3. Subida del archivo (API de contenidos de GitHub).
+    // 3a. El respaldo lleva datos de clientes, ventas y empleados: nunca se sube a un repositorio público.
+    const info = await gh(p.token, `/repos/${p.repositorio}`);
+    if (!info.ok) throw new Error(`No se pudo consultar el repositorio (${info.status}).`);
+    if ((await info.json()).private !== true) {
+      throw new Error("El repositorio de respaldos es público: hágalo privado en GitHub antes de enviar respaldos.");
+    }
+    // 3b. Subida del archivo (API de contenidos de GitHub).
     const r = await gh(p.token, `/repos/${p.repositorio}/contents/${archivo}`, {
       method: "PUT",
       body: JSON.stringify({ message: `Respaldo ${origen} ${bolivia}`, content: base64(texto), branch: p.rama }),

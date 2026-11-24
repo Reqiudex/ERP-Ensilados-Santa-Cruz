@@ -12,7 +12,9 @@ abstract interface class RepositorioOperaciones {
   Future<List<Registro>> revisiones(String loteId);
 
   /// Inserta un registro hecho con o sin conexión; no duplica si el identificador ya existe.
-  Future<void> sincronizar(String tabla, Registro datos);
+  /// Envía un registro de la cola del teléfono. [id] identifica la operación para que el servidor no la aplique dos
+  /// veces si la respuesta anterior se perdió.
+  Future<void> sincronizar(String tabla, Registro datos, String id);
 
   Future<Registro> cerrarOrden(String ordenId, int rollos);
   Future<Registro> solicitarCorreccion(String pesajeId, double bruto, double tara, double humedad, double impurezas, String motivo);

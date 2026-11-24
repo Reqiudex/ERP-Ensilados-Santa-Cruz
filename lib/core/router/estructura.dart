@@ -161,6 +161,7 @@ class _EstructuraState extends ConsumerState<Estructura> {
         return KeyEventResult.ignored;
       }, child: Column(children: [
         _PestanasModulo(ruta: widget.ruta, rol: perfil.rol),
+        const _AvisoSincronizacion(),
         Expanded(child: widget.hijo),
       ])),
     );
@@ -311,6 +312,33 @@ class _IndicadorConexion extends ConsumerWidget {
         borderRadius: BorderRadius.circular(20),
         onTap: () => ref.read(modoSinRedProvider.notifier).cambiar(!simulado),
         child: chip,
+      ),
+    );
+  }
+}
+
+/// Aviso cuando hay registros guardados en el teléfono que no pueden enviarse sin volver a ingresar en línea.
+class _AvisoSincronizacion extends ConsumerWidget {
+  const _AvisoSincronizacion();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mensaje = ref.watch(avisoSincronizacionProvider);
+    if (mensaje == null || !ref.watch(enLineaProvider)) return const SizedBox.shrink();
+    return Material(
+      color: Colores.ambar.withValues(alpha: .18),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+        child: Row(children: [
+          const Icon(Icons.cloud_upload_outlined, color: Colores.ambarOscuro),
+          const SizedBox(width: 10),
+          Expanded(child: Text(mensaje)),
+          TextButton(
+            // Los registros pendientes siguen guardados en el teléfono: se envían al volver a ingresar.
+            onPressed: () => ref.read(sesionProvider.notifier).cerrarSesion(
+                mensaje: 'Ingrese con su contraseña para enviar los registros guardados en el teléfono.'),
+            child: const Text('Ingresar'),
+          ),
+        ]),
       ),
     );
   }

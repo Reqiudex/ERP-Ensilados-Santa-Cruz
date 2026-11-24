@@ -24,6 +24,24 @@ jobs:
           flutter-version: 3.50.0
           cache: true
       - run: flutter pub get
+      - name: Clave de firma estable (Secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::Sin clave de firma en los Secrets: el APK se firma con una clave de depuración distinta en cada compilación y no se podrá instalar encima de la versión anterior."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/publicacion.jks
+          {
+            echo "storeFile=publicacion.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > android/key.properties
       - run: flutter build apk --release
       - run: cp build/app/outputs/flutter-apk/app-release.apk erp-ensilados-santa-cruz.apk
       - name: Quitar la Release anterior para que la etiqueta apunte a este commit

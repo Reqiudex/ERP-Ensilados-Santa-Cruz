@@ -14,6 +14,14 @@ class MatrizPagina extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mio = ref.watch(perfilProvider)?.rol;
+    // Defensa adicional a la del enrutador: solo administrador, gerente y superadministrador ven la matriz.
+    if (!Submodulo.rbac.permitido(mio)) {
+      return const Pagina(
+        etiquetaRf: 'Seguridad y Accesos · RF-02',
+        titulo: 'Roles y permisos',
+        hijos: [MensajeVacio(icono: Icons.lock_outline, titulo: 'Su rol no consulta la matriz de permisos.')],
+      );
+    }
     // El superadministrador solo aparece para otro superadministrador.
     final roles = mio == Rol.superadmin ? Rol.values : Rol.deLaMatriz;
     Color color(Acceso a) => switch (a) {

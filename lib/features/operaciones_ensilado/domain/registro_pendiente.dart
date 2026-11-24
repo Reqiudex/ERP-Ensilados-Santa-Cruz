@@ -8,6 +8,9 @@ class RegistroPendiente {
     required this.creado,
     this.estado = 'pendiente',
     this.motivo,
+    this.usuario,
+    this.intentos = 0,
+    this.ultimoError,
   });
 
   factory RegistroPendiente.desdeJson(Map<String, dynamic> j) => RegistroPendiente(
@@ -17,6 +20,9 @@ class RegistroPendiente {
         creado: DateTime.parse(j['creado'] as String),
         estado: j['estado'] as String? ?? 'pendiente',
         motivo: j['motivo'] as String?,
+        usuario: j['usuario'] as String?,
+        intentos: (j['intentos'] as num?)?.toInt() ?? 0,
+        ultimoError: j['ultimo_error'] as String?,
       );
 
   final String id;
@@ -26,13 +32,37 @@ class RegistroPendiente {
   final String estado;
   final String? motivo;
 
+  /// Cuenta que lo registró en el teléfono: solo esa cuenta lo envía al servidor.
+  final String? usuario;
+
+  /// Envíos fallidos por causas pasajeras (señal, sesión, servidor ocupado). No se descarta por ellos.
+  final int intentos;
+  final String? ultimoError;
+
   bool get rechazado => estado == 'rechazado';
 
-  Map<String, dynamic> aJson() =>
-      {'id': id, 'tabla': tabla, 'datos': datos, 'creado': creado.toIso8601String(), 'estado': estado, 'motivo': motivo};
+  Map<String, dynamic> aJson() => {
+        'id': id,
+        'tabla': tabla,
+        'datos': datos,
+        'creado': creado.toIso8601String(),
+        'estado': estado,
+        'motivo': motivo,
+        'usuario': usuario,
+        'intentos': intentos,
+        'ultimo_error': ultimoError,
+      };
 
-  RegistroPendiente rechazar(String m) =>
-      RegistroPendiente(id: id, tabla: tabla, datos: datos, creado: creado, estado: 'rechazado', motivo: m);
+  RegistroPendiente rechazar(String m) => RegistroPendiente(
+      id: id, tabla: tabla, datos: datos, creado: creado, estado: 'rechazado', motivo: m, usuario: usuario, intentos: intentos);
+
+  /// Sigue pendiente, con el último error pasajero anotado.
+  RegistroPendiente conError(String m) => RegistroPendiente(
+      id: id, tabla: tabla, datos: datos, creado: creado, usuario: usuario, intentos: intentos + 1, ultimoError: m);
+
+  /// Vuelve a la cola un registro rechazado (el operador decide reintentarlo).
+  RegistroPendiente reintentar() =>
+      RegistroPendiente(id: id, tabla: tabla, datos: datos, creado: creado, usuario: usuario);
 
   String get descripcion => switch (tabla) {
         'pesajes' => 'Pesaje placa ${datos['placa']} · ${datos['peso_bruto']} kg bruto',

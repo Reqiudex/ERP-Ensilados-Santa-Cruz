@@ -14,18 +14,8 @@ import '../data/repositorio_inventario_supabase.dart';
 
 final lotesProvider = FutureProvider.autoDispose<List<Fila>>((ref) async {
   ref.watch(pendientesSincronizarProvider);
-  final enLinea = ref.watch(enLineaProvider);
-  final cache = ref.watch(datosOperadorProvider.select((m) => m['lotes_stock']));
-  List<Fila> locales() =>
-      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
-  if (!enLinea) return locales();
-  try {
-    final l = await ref.watch(repositorioInventarioProvider).lotes();
-    ref.read(datosOperadorProvider.notifier).guardarClave('lotes_stock', l);
-    return l;
-  } catch (_) {
-    return locales();
-  }
+  final repo = ref.watch(repositorioInventarioProvider);
+  return consultarConCopiaLocal(ref, 'lotes_stock', remoto: () => repo.lotes(), local: filasDeCopia);
 });
 
 double _total(Fila l, String campo, {String? sede}) => ((l['existencias'] as List?) ?? const [])

@@ -188,15 +188,20 @@ class Asincrono<T> extends StatelessWidget {
   final VoidCallback? alReintentar;
 
   @override
-  Widget build(BuildContext context) => switch (valor) {
-        AsyncData(:final value) => datos(value),
-        AsyncError(:final error) => MensajeVacio(
-            icono: error is ErrorNegocio && error.prohibido ? Icons.lock_outline : Icons.cloud_off_outlined,
-            titulo: error is ErrorNegocio ? error.mensaje : traducirError(error).mensaje,
-            accion: alReintentar == null ? null : OutlinedButton(onPressed: alReintentar, child: const Text('Reintentar')),
-          ),
-        _ => const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator())),
-      };
+  Widget build(BuildContext context) {
+    // Mientras se recarga se sigue mostrando el último dato: la pantalla no vuelve al círculo de carga en cada
+    // actualización (sincronización, señal que vuelve, filtros).
+    if (valor.hasValue) return datos(valor.requireValue);
+    if (valor.hasError) {
+      final error = valor.error!;
+      return MensajeVacio(
+        icono: error is ErrorNegocio && error.prohibido ? Icons.lock_outline : Icons.cloud_off_outlined,
+        titulo: error is ErrorNegocio ? error.mensaje : traducirError(error).mensaje,
+        accion: alReintentar == null ? null : OutlinedButton(onPressed: alReintentar, child: const Text('Reintentar')),
+      );
+    }
+    return const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()));
+  }
 }
 
 class MensajeVacio extends StatelessWidget {

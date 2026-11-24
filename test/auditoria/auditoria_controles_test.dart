@@ -40,11 +40,10 @@ void main() {
       'tipo': 'prueba_control', 'entidad': 'pruebas', 'entidad_id': _uuid.v4(), 'datos_propuestos': {'auditoria': 2},
       'motivo': 'Auditoría 2: aprobar lo propio', 'registrado_por': g.usuarioId, 'estado': 'pendiente',
     });
-    final id = (ins.cuerpo as List).first['id'];
-    final r = await g.rpc('resolver_solicitud', {'p_solicitud': id, 'p_aprobar': true});
-    final directo = await g.patch('solicitudes_aprobacion?id=eq.$id', {'estado': 'aprobada', 'aprobado_por': g.usuarioId});
-    evidencia(2, 'Función: $r · UPDATE directo: $directo');
-    expect(r.codigo, '23514');
+    // La solicitud no puede ni crearse directamente (C1 de la auditoría): quien aprueba no registra.
+    final directo = await g.patch('solicitudes_aprobacion?estado=eq.pendiente', {'estado': 'aprobada', 'aprobado_por': g.usuarioId});
+    evidencia(2, 'INSERT directo: $ins · UPDATE directo: $directo');
+    expect(ins.estado, anyOf(401, 403));
     expect(directo.estado, anyOf(401, 403));
   });
 

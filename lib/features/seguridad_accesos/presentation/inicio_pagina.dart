@@ -17,7 +17,9 @@ final indicadoresInicioProvider = FutureProvider.autoDispose<Map<String, dynamic
   final perfil = ref.watch(perfilProvider);
   final api = ref.watch(apiProvider);
   final enLinea = ref.watch(enLineaProvider);
-  final cache = ref.watch(datosOperadorProvider);
+  // Sin señal se observa la copia local; con señal solo se lee (este proveedor la escribe al final y observarla lo
+  // recargaba sin fin, dejando el inicio «cargando»).
+  final cache = enLinea ? ref.read(datosOperadorProvider) : ref.watch(datosOperadorProvider);
   if (perfil == null) return {};
 
   Map<String, dynamic> desdeCache() => {
@@ -61,7 +63,9 @@ final indicadoresInicioProvider = FutureProvider.autoDispose<Map<String, dynamic
         await intentar(() async => r['rendimiento'] = await api.rpcLista('reporte_rendimiento'));
       }
   }
-  ref.read(datosOperadorProvider.notifier).guardarClave('indicadores_inicio', r);
+  try {
+    ref.read(datosOperadorProvider.notifier).guardarClave('indicadores_inicio', r);
+  } catch (_) {}
   return r;
 });
 
@@ -182,18 +186,8 @@ class _Indicadores extends ConsumerWidget {
 }
 
 final misSolicitudesProvider = FutureProvider.autoDispose<List<Fila>>((ref) async {
-  final enLinea = ref.watch(enLineaProvider);
-  final cache = ref.watch(datosOperadorProvider.select((m) => m['mis_solicitudes']));
-  List<Fila> locales() =>
-      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
-  if (!enLinea) return locales();
-  try {
-    final l = await ref.watch(apiProvider).rpcLista('mis_solicitudes');
-    ref.read(datosOperadorProvider.notifier).guardarClave('mis_solicitudes', l);
-    return l;
-  } catch (_) {
-    return locales();
-  }
+  final api = ref.watch(apiProvider);
+  return consultarConCopiaLocal(ref, 'mis_solicitudes', remoto: () => api.rpcLista('mis_solicitudes'), local: filasDeCopia);
 });
 
 /// Seguimiento de las solicitudes que registró el usuario (para cualquier rol).

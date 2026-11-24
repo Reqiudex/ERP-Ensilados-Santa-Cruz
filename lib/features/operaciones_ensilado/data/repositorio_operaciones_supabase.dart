@@ -45,63 +45,18 @@ class RepositorioOperacionesSupabase implements RepositorioOperaciones {
       'id, estado_film, observacion, fecha_registro', igual: {'lote_id': loteId}, orden: 'fecha_registro');
 
   @override
-  Future<void> sincronizar(String tabla, Registro datos) async {
+  Future<void> sincronizar(String tabla, Registro datos, String id) async {
     switch (tabla) {
-      case 'cerrar_orden':
-        await _api.rpc('cerrar_orden', {
-          'p_orden': datos['orden_id'],
-          'p_rollos': (datos['rollos'] as num).toInt(),
-          'p_fecha_dispositivo': datos['fecha_dispositivo'] ?? DateTime.now().toUtc().toIso8601String(),
-        });
-      case 'solicitar_correccion_pesaje':
-        await _api.rpc('solicitar_correccion_pesaje', {
-          'p_pesaje': datos['pesaje_id'],
-          'p_peso_bruto': datos['peso_bruto'],
-          'p_tara': datos['tara'],
-          'p_humedad': datos['humedad'],
-          'p_impurezas': datos['impurezas'],
-          'p_motivo': datos['motivo'],
-        });
-      case 'solicitar_merma':
-        await _api.rpc('solicitar_merma', {
-          'p_lote': datos['lote_id'],
-          'p_cantidad': (datos['cantidad'] as num).toInt(),
-          'p_causa': datos['causa'],
-          'p_descripcion': datos['descripcion'],
-        });
-      case 'solicitar_ajuste':
-        await _api.rpc('solicitar_ajuste', {
-          'p_producto': datos['producto_id'],
-          'p_lote': datos['lote_id'],
-          'p_cantidad': datos['cantidad'],
-          'p_descripcion': datos['descripcion'],
-        });
-      case 'emitir_guia':
-        await _api.rpc('emitir_guia', {
-          'p_destino': datos['destino'],
-          'p_items': datos['items'],
-        });
-      case 'recibir_guia':
-        await _api.rpc('recibir_guia', {
-          'p_guia': datos['guia_id'],
-          'p_items': datos['items'],
-        });
-      case 'registrar_despacho':
-        await _api.rpc('registrar_despacho', {
-          'p_nota': datos['nota_id'],
-          'p_lote': datos['lote_id'],
-          'p_pesos': datos['pesos'],
-          'p_placa': datos['placa'],
-          'p_receptor': datos['receptor'],
-          'p_peso_bascula': datos['peso_bascula'],
-        });
-      case 'registrar_peso_bascula':
-        await _api.rpc('registrar_peso_bascula', {
-          'p_despacho': datos['despacho_id'],
-          'p_peso': datos['peso'],
-        });
+      // Inserciones simples: el id generado en el teléfono hace que un reenvío no duplique la fila.
+      case 'pesajes' || 'ordenes_ensilado' || 'consumos_insumo' || 'revisiones_fermentacion':
+        await _api.insertar(tabla, {...datos, 'id': datos['id'] ?? id}, ignorarDuplicado: true);
+      // Operaciones con reglas de negocio: pasan por el servidor, que guarda el resultado por id (idempotente).
       default:
-        await _api.insertar(tabla, datos, ignorarDuplicado: true);
+        final carga = {...datos};
+        // El lote creado sin conexión conserva en el servidor el mismo id que ya usan el teléfono y la cola
+        // (revisiones, mermas o guías registradas después sobre ese lote).
+        if (tabla == 'cerrar_orden') carga['lote_id'] = datos['lote_id'] ?? id;
+        await _api.rpc('sincronizar_operacion', {'p_id': id, 'p_operacion': tabla, 'p_datos': carga});
     }
   }
 

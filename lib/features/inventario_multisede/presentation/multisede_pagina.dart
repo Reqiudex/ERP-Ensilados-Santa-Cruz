@@ -20,19 +20,30 @@ class FotoStock {
 final stockEnVivoProvider = StreamProvider.autoDispose<FotoStock>((ref) async* {
   final repo = ref.watch(repositorioInventarioProvider);
   final enLinea = ref.watch(enLineaProvider);
-  final cache = ref.watch(datosOperadorProvider.select((m) => m['existencias']));
-  List<Fila> locales() =>
-      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
-
   if (!enLinea) {
-    yield FotoStock(locales(), DateTime.now(), 0);
+    // Sin señal se observa la copia local del teléfono.
+    yield FotoStock(filasDeCopia(ref.watch(datosOperadorProvider.select((m) => m['existencias']))), DateTime.now(), 0);
     return;
+  }
+  // Con señal la copia solo se escribe (observarla aquí reiniciaba el flujo en vivo sin fin).
+  List<Fila> locales() {
+    try {
+      return filasDeCopia(ref.read(datosOperadorProvider)['existencias']);
+    } catch (_) {
+      return const <Fila>[];
+    }
+  }
+
+  void guardar(List<Fila> l) {
+    try {
+      ref.read(datosOperadorProvider.notifier).guardarClave('existencias', l);
+    } catch (_) {}
   }
 
   var eventos = 0;
   try {
     final inicial = await repo.existencias();
-    ref.read(datosOperadorProvider.notifier).guardarClave('existencias', inicial);
+    guardar(inicial);
     yield FotoStock(inicial, DateTime.now(), eventos);
   } catch (_) {
     yield FotoStock(locales(), DateTime.now(), eventos);
@@ -44,7 +55,7 @@ final stockEnVivoProvider = StreamProvider.autoDispose<FotoStock>((ref) async* {
       eventos++;
       try {
         final act = await repo.existencias();
-        ref.read(datosOperadorProvider.notifier).guardarClave('existencias', act);
+        guardar(act);
         yield FotoStock(act, DateTime.now(), eventos);
       } catch (_) {}
     }

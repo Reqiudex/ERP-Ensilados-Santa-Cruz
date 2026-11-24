@@ -50,18 +50,16 @@ void main() {
     expect(r.mensaje, contains('Ya existe una cuenta registrada con ese CI'));
   });
 
-  test('CP-02 RF-02 Aprobar una solicitud que el mismo usuario registró', () async {
+  test('CP-02 RF-02 Registrar una solicitud propia para luego aprobarla', () async {
+    // Desde la migración 20261124120000 nadie inserta solicitudes directamente: solo las funciones que validan
+    // los datos las crean, y el gerente (quien aprueba) no tiene ninguna función que registre solicitudes.
     final g = await Sesion.de('gerente');
     final ins = await g.post('solicitudes_aprobacion', {
       'tipo': 'prueba_control', 'entidad': 'pruebas', 'entidad_id': _uuid.v4(), 'datos_propuestos': {'caso': 'CP-02'},
       'motivo': 'Prueba de doble control (CP-02)', 'registrado_por': g.usuarioId, 'estado': 'pendiente',
     });
-    expect(ins.estado, 201, reason: '$ins');
-    final id = (ins.cuerpo as List).first['id'];
-    final r = await g.rpc('resolver_solicitud', {'p_solicitud': id, 'p_aprobar': true});
-    obtenido('CP-02', '$r');
-    expect(r.codigo, '23514');
-    expect(r.mensaje, contains('solicitudes_aprobacion_check'));
+    obtenido('CP-02', '$ins');
+    expect(ins.estado, anyOf(401, 403));
   });
 
   test('CP-03 RF-03 Guardar una clave débil', () async {

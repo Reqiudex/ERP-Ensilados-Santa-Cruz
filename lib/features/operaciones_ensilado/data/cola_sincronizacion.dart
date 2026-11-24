@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -42,62 +43,143 @@ const Map<String, String> skusInsumosOffline = {
   'ffffffff-ffff-ffff-ffff-ffffffffffff': 'INS-INC-001',
 };
 
-/// Cola local de solo inserción (persistencia de Riverpod 3 + SQLite en Android).
-/// Cada registro lleva un UUID generado en el dispositivo y la hora del dispositivo; al reconectar se envía en orden
-/// y sin duplicarse. Si el servidor lo rechaza, queda «rechazado» con el motivo para el operador.
+/// Cola local de solo inserción del teléfono.
+///
+/// Cada registro lleva un UUID generado en el dispositivo, la hora del dispositivo y la cuenta que lo hizo. Se guarda
+/// cifrado en el almacén seguro de Android (Keystore) en cada cambio, así sobrevive a cierres y reinicios del teléfono.
+/// Al reconectar se envía en orden de dependencia; el servidor aplica cada operación una sola vez aunque llegue
+/// repetida. Solo se rechaza lo que el servidor rechaza por los datos; la falta de señal, una sesión vencida o un
+/// servidor ocupado dejan el registro pendiente para el siguiente intento.
 class ColaSincronizacion extends Notifier<List<RegistroPendiente>> {
+  static const _clave = 'cola_pendientes_v2';
+  static const _intentosMaximos = 8;
+  static const _uuid = Uuid();
+
   bool _enviando = false;
+  Future<void> _carga = Future.value();
+  Future<void> _escritura = Future.value();
 
   @override
   List<RegistroPendiente> build() {
-    // ignore: experimental_member_use
-    persist(
-      ref.watch(almacenPersistenteProvider.future),
-      key: 'cola_sincronizacion_v1',
-      encode: (s) => jsonEncode(s.map((r) => r.aJson()).toList()),
-      decode: (t) => (jsonDecode(t) as List).map((e) => RegistroPendiente.desdeJson(e as Map<String, dynamic>)).toList(),
-      options: const StorageOptions(cacheTime: StorageCacheTime.unsafe_forever),
-    );
+    _carga = _cargar();
     return const [];
   }
 
-  static const _uuid = Uuid();
+  Future<void> _cargar() async {
+    try {
+      final texto = await ref.read(almacenSeguroProvider).leer(_clave);
+      if (texto == null || texto.isEmpty) return;
+      final guardados = (jsonDecode(texto) as List)
+          .whereType<Map>()
+          .map((e) => RegistroPendiente.desdeJson(Map<String, dynamic>.from(e)))
+          .toList();
+      final ids = state.map((r) => r.id).toSet();
+      state = [...guardados.where((r) => !ids.contains(r.id)), ...state];
+    } catch (_) {
+      // Un almacén ilegible no debe impedir seguir registrando.
+    }
+  }
 
-  /// Guarda el registro en el teléfono y lo envía de inmediato si hay conexión.
+  /// Guarda la cola completa; las escrituras van en fila para que nunca quede una versión vieja encima de una nueva.
+  Future<void> _persistir() {
+    final texto = jsonEncode(state.map((r) => r.aJson()).toList());
+    final almacen = ref.read(almacenSeguroProvider);
+    _escritura = _escritura.then((_) async {
+      try {
+        await almacen.escribir(_clave, texto);
+      } catch (_) {}
+    });
+    return _escritura;
+  }
+
+  void _reemplazar(RegistroPendiente r) => state = [for (final x in state) x.id == r.id ? r : x];
+
+  /// Guarda el registro en el teléfono y lo envía en segundo plano si hay conexión.
   /// Devuelve el identificador generado en el dispositivo.
   Future<String> registrar(String tabla, Map<String, dynamic> datos) async {
     if (!tablasSinConexion.contains(tabla)) throw ArgumentError('$tabla exige conexión');
+    await _carga;
     final id = (datos['id'] as String?) ?? _uuid.v4();
-    final r = RegistroPendiente(id: id, tabla: tabla, datos: {...datos, 'id': id}, creado: DateTime.now());
+    final r = RegistroPendiente(
+      id: id,
+      tabla: tabla,
+      datos: {...datos, 'id': id},
+      creado: DateTime.now(),
+      usuario: ref.read(perfilProvider)?.id,
+    );
     state = [...state, r];
+    await _persistir();
     ref.read(datosOperadorProvider.notifier).aplicarMovimientoLocal(tabla, r.datos);
-    if (ref.read(enLineaProvider)) await sincronizar();
+    // El envío no bloquea la pantalla: con señal débil la petición puede tardar.
+    if (ref.read(enLineaProvider)) unawaited(sincronizar());
     return id;
   }
 
   int get pendientes => state.where((r) => !r.rechazado).length;
 
-  /// Envía la cola en orden cronológico y de dependencia. Se detiene si se pierde la conexión.
+  /// Envía la cola en orden de dependencia. Se detiene si se pierde la conexión o hay que volver a ingresar.
   Future<void> sincronizar() async {
     if (_enviando || !ref.read(enLineaProvider)) return;
     _enviando = true;
     var envioAlguno = false;
+    final aviso = ref.read(avisoSincronizacionProvider.notifier);
     try {
-      final repo = ref.read(repositorioOperacionesProvider);
-      for (final r in ordenDeEnvio(state)) {
+      await _carga;
+      if (ordenDeEnvio(state).isEmpty) {
+        aviso.fijar(null);
+        return;
+      }
+      final auth = ref.read(supabaseProvider).auth;
+      final sesion = auth.currentSession;
+      if (sesion == null) {
+        // Ingresó sin conexión: no hay sesión del servidor con la que enviar.
+        aviso.fijar('Hay $pendientes registros guardados en el teléfono. Vuelva a ingresar con su contraseña '
+            'para enviarlos al servidor.');
+        return;
+      }
+      if (sesion.isExpired) {
         try {
-          await repo.sincronizar(r.tabla, r.datos);
-          state = state.where((x) => x.id != r.id).toList();
-          envioAlguno = true;
-        } on ErrorNegocio catch (e) {
-          if (e.codigo == 'red') break;
-          state = [for (final x in state) x.id == r.id ? x.rechazar(e.mensaje) : x];
+          await auth.refreshSession();
         } catch (e) {
-          final err = traducirError(e);
-          if (err.codigo == 'red') break;
-          state = [for (final x in state) x.id == r.id ? x.rechazar(err.mensaje) : x];
+          if (esErrorRed(e)) return;
+          aviso.fijar('Su sesión venció. Vuelva a ingresar con su contraseña para enviar los registros pendientes.');
+          return;
         }
       }
+      final usuario = auth.currentUser?.id;
+      final repo = ref.read(repositorioOperacionesProvider);
+      for (final r in ordenDeEnvio(state)) {
+        // Lo registrado por otra cuenta en este teléfono espera a que esa cuenta ingrese.
+        if (r.usuario != null && usuario != null && r.usuario != usuario) continue;
+        try {
+          await repo.sincronizar(r.tabla, r.datos, r.id);
+          state = state.where((x) => x.id != r.id).toList();
+          await _persistir();
+          envioAlguno = true;
+        } catch (e) {
+          var err = e is ErrorNegocio ? e : traducirError(e);
+          // Un «sin permiso» con la sesión revocada no es culpa del registro: se reintenta tras ingresar de nuevo.
+          if (err.codigo == '42501' && !await _sesionVigente()) {
+            err = const ErrorNegocio('Su sesión venció. Vuelva a iniciar sesión.', codigo: 'sesion');
+          }
+          if (esErrorPasajero(err)) {
+            _reemplazar(r.conError(err.mensaje));
+            await _persistir();
+            if (err.codigo == 'sesion') {
+              aviso.fijar('Su sesión venció. Vuelva a ingresar con su contraseña para enviar los registros pendientes.');
+            }
+            break;
+          }
+          if (err.codigo == null && r.intentos + 1 < _intentosMaximos) {
+            // Error desconocido: se reintenta unas veces antes de pedir revisión al operador.
+            _reemplazar(r.conError(err.mensaje));
+          } else {
+            _reemplazar(r.rechazar(err.mensaje));
+          }
+          await _persistir();
+        }
+      }
+      if (ordenDeEnvio(state).where((r) => r.usuario == null || r.usuario == usuario).isEmpty) aviso.fijar(null);
       if (envioAlguno || state.where((r) => !r.rechazado).isEmpty) {
         if (esAndroid) await ref.read(pinLocalProvider).marcarSincronizado();
         await ref.read(datosOperadorProvider.notifier).refrescar();
@@ -107,11 +189,40 @@ class ColaSincronizacion extends Notifier<List<RegistroPendiente>> {
     }
   }
 
+  Future<bool> _sesionVigente() async {
+    try {
+      return (await ref.read(apiProvider).rpc('sesion_vigente'))['valor'] == true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// El operador descarta un registro rechazado después de leer el motivo (no se edita: se vuelve a registrar).
-  void descartar(String id) => state = state.where((r) => r.id != id).toList();
+  Future<void> descartar(String id) async {
+    state = state.where((r) => r.id != id).toList();
+    await _persistir();
+  }
+
+  /// El operador vuelve a enviar un registro rechazado (por ejemplo, después de que la oficina corrigió un dato).
+  Future<void> reintentar(String id) async {
+    state = [for (final r in state) r.id == id ? r.reintentar() : r];
+    await _persistir();
+    if (ref.read(enLineaProvider)) unawaited(sincronizar());
+  }
 }
 
 final colaProvider = NotifierProvider<ColaSincronizacion, List<RegistroPendiente>>(ColaSincronizacion.new);
+
+/// Mensaje para el usuario cuando la cola no puede enviarse (sin sesión del servidor o sesión vencida).
+class AvisoSincronizacion extends Notifier<String?> {
+  @override
+  String? build() => null;
+  void fijar(String? mensaje) {
+    if (state != mensaje) state = mensaje;
+  }
+}
+
+final avisoSincronizacionProvider = NotifierProvider<AvisoSincronizacion, String?>(AvisoSincronizacion.new);
 
 final pendientesSincronizarProvider = Provider<int>((ref) => ref.watch(colaProvider).where((r) => !r.rechazado).length);
 
@@ -485,3 +596,46 @@ class DatosOperador extends Notifier<Map<String, dynamic>> {
 }
 
 final datosOperadorProvider = NotifierProvider<DatosOperador, Map<String, dynamic>>(DatosOperador.new);
+
+/// Filas de una copia local (lista JSON guardada en el teléfono).
+List<Fila> filasDeCopia(Object? copia) =>
+    ((copia as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+
+/// Consulta de pantalla con copia local para trabajar sin conexión.
+///
+/// Sin señal observa la copia guardada en el teléfono, así lo registrado sin conexión se ve al instante. Con señal
+/// consulta el servidor y actualiza la copia SIN observarla: antes las pantallas observaban la copia y la escribían
+/// en la misma consulta, lo que las recargaba sin fin y las dejaba «cargando» para siempre.
+Future<T> consultarConCopiaLocal<T>(
+  Ref ref,
+  String clave, {
+  required Future<T> Function() remoto,
+  required T Function(Object? copia) local,
+}) async {
+  if (!ref.watch(enLineaProvider)) {
+    return local(ref.watch(datosOperadorProvider.select((m) => m[clave])));
+  }
+  try {
+    final valor = await remoto();
+    try {
+      ref.read(datosOperadorProvider.notifier).guardarClave(clave, valor);
+    } catch (_) {
+      // La pantalla se cerró mientras llegaba la respuesta: no hace falta guardar la copia.
+    }
+    return valor;
+  } on ErrorNegocio catch (e) {
+    Object? copia;
+    try {
+      copia = ref.read(datosOperadorProvider)[clave];
+    } catch (_) {}
+    // Sin permiso y sin copia: se muestra el motivo en lugar de una pantalla vacía.
+    if (copia == null && e.prohibido) rethrow;
+    return local(copia);
+  } catch (_) {
+    Object? copia;
+    try {
+      copia = ref.read(datosOperadorProvider)[clave];
+    } catch (_) {}
+    return local(copia);
+  }
+}

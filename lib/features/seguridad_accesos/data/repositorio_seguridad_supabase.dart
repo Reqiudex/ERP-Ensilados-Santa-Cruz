@@ -16,16 +16,20 @@ class RepositorioSeguridadSupabase implements RepositorioSeguridad {
   Future<Perfil> iniciarSesion(String identificador, String clave) async {
     final id = identificador.trim();
     if (id.isEmpty || clave.isEmpty) throw const ErrorNegocio('Escriba su CI o correo y su contraseña.');
-    final correo = (await _api.rpc('correo_para_ingreso', {'p_identificador': id}))['valor'] as String;
+    // El servidor verifica la contraseña, cuenta los intentos fallidos y bloquea; solo devuelve el correo si la
+    // contraseña es correcta (el CI no revela qué cuentas existen).
+    final previo = await _api.rpc('preparar_ingreso', {'p_identificador': id, 'p_clave': clave});
+    if (previo['ok'] != true) {
+      throw ErrorNegocio('${previo['mensaje'] ?? 'Credenciales incorrectas o cuenta bloqueada temporalmente.'}',
+          codigo: 'credenciales');
+    }
+    final correo = previo['correo'] as String;
     try {
       await _auth.signInWithPassword(email: correo, password: clave);
     } on AuthException catch (e) {
       if (esErrorRed(e, e.message)) {
         throw const ErrorNegocio('Sin conexión con el servidor. Revise su internet e intente de nuevo.', codigo: 'red');
       }
-      try {
-        await _api.rpc('registrar_intento_fallido', {'p_identificador': id});
-      } catch (_) {}
       // Mismo mensaje exista o no la cuenta (no revela qué CI o correo están registrados).
       throw const ErrorNegocio('Credenciales incorrectas o cuenta bloqueada temporalmente.');
     } catch (e) {

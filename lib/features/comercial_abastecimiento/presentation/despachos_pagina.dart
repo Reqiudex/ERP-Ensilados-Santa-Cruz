@@ -16,34 +16,14 @@ import '../domain/calculos_comerciales.dart';
 
 final despachosPendientesProvider = FutureProvider.autoDispose<List<Fila>>((ref) async {
   ref.watch(pendientesSincronizarProvider);
-  final enLinea = ref.watch(enLineaProvider);
-  final cache = ref.watch(datosOperadorProvider.select((m) => m['despachos_pendientes']));
-  List<Fila> locales() =>
-      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
-  if (!enLinea) return locales();
-  try {
-    final l = await ref.watch(repositorioComercialProvider).despachosPendientes();
-    ref.read(datosOperadorProvider.notifier).guardarClave('despachos_pendientes', l);
-    return l;
-  } catch (_) {
-    return locales();
-  }
+  final repo = ref.watch(repositorioComercialProvider);
+  return consultarConCopiaLocal(ref, 'despachos_pendientes', remoto: () => repo.despachosPendientes(), local: filasDeCopia);
 });
 
 final despachosProvider = FutureProvider.autoDispose<List<Fila>>((ref) async {
   ref.watch(pendientesSincronizarProvider);
-  final enLinea = ref.watch(enLineaProvider);
-  final cache = ref.watch(datosOperadorProvider.select((m) => m['despachos']));
-  List<Fila> locales() =>
-      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
-  if (!enLinea) return locales();
-  try {
-    final l = await ref.watch(repositorioComercialProvider).despachos();
-    ref.read(datosOperadorProvider.notifier).guardarClave('despachos', l);
-    return l;
-  } catch (_) {
-    return locales();
-  }
+  final repo = ref.watch(repositorioComercialProvider);
+  return consultarConCopiaLocal(ref, 'despachos', remoto: () => repo.despachos(), local: filasDeCopia);
 });
 
 /// RF-19 Control de despachos: cada rollo se pesa; en ventas por tonelada se controla la tolerancia del 5 %.

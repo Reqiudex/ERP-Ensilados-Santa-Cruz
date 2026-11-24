@@ -97,7 +97,9 @@ const List<OperacionMatriz> matrizPermisos = [
 /// Submódulos de la Figura 7 (5 módulos, 23 submódulos) y qué roles los usan.
 enum Submodulo {
   usuarios('Gestión de Usuarios', 'RF-01', {_ad, _ge}),
-  rbac('Control de Acceso Basado en Roles', 'RF-02', {_ad, _op, _ej, _ca, _ge}),
+  // La matriz de permisos (RBAC) solo la consultan el administrador del sistema, el gerente general y el
+  // superadministrador (este último pasa siempre por `permitido`).
+  rbac('Control de Acceso Basado en Roles', 'RF-02', {_ad, _ge}),
   politicas('Políticas de Contraseñas', 'RF-03', {_ad}),
   sesiones('Autenticación y Sesiones', 'RF-04', {_ad, _ge}),
   bitacora('Bitácora de Eventos', 'RF-05', {_ad, _ge}),

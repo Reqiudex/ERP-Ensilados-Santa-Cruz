@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/formato.dart';
-import '../../../core/conexion/conexion.dart';
 import '../../../core/supabase/api.dart';
 import '../../../core/tema/tema.dart';
 import '../../../core/widgets/componentes.dart';
@@ -14,22 +13,13 @@ import '../domain/calculos_operaciones.dart';
 
 final lotesFermentacionProvider = FutureProvider.autoDispose<List<Fila>>((ref) async {
   ref.watch(pendientesSincronizarProvider);
-  final enLinea = ref.watch(enLineaProvider);
-  final cache = ref.watch(datosOperadorProvider.select((m) => m['lotes_fermentacion']));
-  List<Fila> locales() =>
-      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
-  if (!enLinea) return locales();
   final repo = ref.watch(repositorioOperacionesProvider);
-  try {
-    await repo.actualizarAptos();
-  } catch (_) {}
-  try {
-    final l = await repo.lotesEnFermentacion();
-    ref.read(datosOperadorProvider.notifier).guardarClave('lotes_fermentacion', l);
-    return l;
-  } catch (_) {
-    return locales();
-  }
+  return consultarConCopiaLocal(ref, 'lotes_fermentacion', local: filasDeCopia, remoto: () async {
+    try {
+      await repo.actualizarAptos();
+    } catch (_) {}
+    return repo.lotesEnFermentacion();
+  });
 });
 
 /// RF-10 Control de fermentación y calidad: días mínimos por grano y estado visual del film.

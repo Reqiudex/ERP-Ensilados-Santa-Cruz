@@ -38,15 +38,33 @@ jobs:
           pedidos=$(docker run --rm postgres:17 psql "$SUPABASE_DB_URL" -At -c "select count(*) from public.bitacora_eventos p where p.accion = 'respaldo_pedido' and p.fecha_servidor > coalesce((select max(fecha_servidor) from public.bitacora_eventos where accion = 'respaldo'), '-infinity')")
           echo "Respaldos manuales pendientes: $pedidos"
           [ "$pedidos" != "0" ] && echo "hacer=si" >> "$GITHUB_OUTPUT" || echo "hacer=no" >> "$GITHUB_OUTPUT"
-      - name: pg_dump
+      - name: pg_dump cifrado
         if: steps.decidir.outputs.hacer == 'si'
         id: volcado
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          RESPALDO_CLAVE: ${{ secrets.RESPALDO_CLAVE }}
+          REPO_PRIVADO: ${{ github.event.repository.private }}
         run: |
-          archivo="respaldo-$(date -u +%Y%m%d-%H%M).dump"
+          # Los artefactos de un repositorio público los descarga cualquier cuenta de GitHub: el respaldo se cifra
+          # siempre con la frase del Secret RESPALDO_CLAVE (AES-256) y sin ella no se publica.
+          if [ -z "$RESPALDO_CLAVE" ]; then
+            if [ "$REPO_PRIVADO" != "true" ]; then
+              echo "::error::Falta el Secret RESPALDO_CLAVE: en un repositorio público el respaldo no se publica sin cifrar."
+              exit 1
+            fi
+            echo "::warning::Falta el Secret RESPALDO_CLAVE: el respaldo se guarda sin cifrar (repositorio privado)."
+          fi
+          base="respaldo-$(date -u +%Y%m%d-%H%M).dump"
           docker run --rm -v "$PWD:/r" postgres:17 pg_dump "$SUPABASE_DB_URL" --format=custom --no-owner --no-privileges \
-            --schema=public --schema=app --file="/r/$archivo"
+            --schema=public --schema=app --file="/r/$base"
+          archivo="$base"
+          if [ -n "$RESPALDO_CLAVE" ]; then
+            gpg --batch --yes --pinentry-mode loopback --passphrase "$RESPALDO_CLAVE" --symmetric --cipher-algo AES256 \
+              --output "$base.gpg" "$base"
+            rm -f "$base"
+            archivo="$base.gpg"
+          fi
           sha=$(sha256sum "$archivo" | cut -d' ' -f1)
           bytes=$(stat -c%s "$archivo")
           echo "archivo=$archivo" >> "$GITHUB_OUTPUT"

@@ -15,36 +15,19 @@ import 'stock_lotes_pagina.dart';
 
 final guiasProvider = FutureProvider.autoDispose<List<Fila>>((ref) async {
   ref.watch(pendientesSincronizarProvider);
-  final enLinea = ref.watch(enLineaProvider);
-  final cache = ref.watch(datosOperadorProvider.select((m) => m['guias']));
-  List<Fila> locales() =>
-      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
-  if (!enLinea) return locales();
-  try {
-    final l = await ref.watch(repositorioInventarioProvider).guias();
-    ref.read(datosOperadorProvider.notifier).guardarClave('guias', l);
-    return l;
-  } catch (_) {
-    return locales();
-  }
+  final repo = ref.watch(repositorioInventarioProvider);
+  return consultarConCopiaLocal(ref, 'guias', remoto: () => repo.guias(), local: filasDeCopia);
 });
 
 final sedesInventarioProvider = FutureProvider.autoDispose<List<Fila>>((ref) async {
-  final enLinea = ref.watch(enLineaProvider);
-  final cache = ref.watch(datosOperadorProvider.select((m) => m['sedes']));
-  List<Fila> locales() {
-    final l = ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+  final repo = ref.watch(repositorioInventarioProvider);
+  List<Fila> locales(Object? c) {
+    final l = filasDeCopia(c);
     return l.isEmpty ? sedesPredeterminadas : l;
   }
 
-  if (!enLinea) return locales();
-  try {
-    final l = await ref.watch(repositorioInventarioProvider).sedes();
-    ref.read(datosOperadorProvider.notifier).guardarClave('sedes', l);
-    return l.isEmpty ? locales() : l;
-  } catch (_) {
-    return locales();
-  }
+  final l = await consultarConCopiaLocal(ref, 'sedes', remoto: () => repo.sedes(), local: locales);
+  return l.isEmpty ? sedesPredeterminadas : l;
 });
 
 /// RF-14 Guías de remisión y transferencia entre centros.

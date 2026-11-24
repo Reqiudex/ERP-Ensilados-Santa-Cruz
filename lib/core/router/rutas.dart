@@ -86,7 +86,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, estado) {
       final s = ref.read(sesionProvider);
       final ruta = estado.matchedLocation;
-      if (s.isLoading) return ruta == '/cargando' ? null : '/cargando';
+      if (s.isLoading && !s.hasValue) return ruta == '/cargando' ? null : '/cargando';
       final sesion = s.value;
       final perfil = sesion?.perfil;
       if (perfil == null) return ruta == '/ingresar' ? null : '/ingresar';

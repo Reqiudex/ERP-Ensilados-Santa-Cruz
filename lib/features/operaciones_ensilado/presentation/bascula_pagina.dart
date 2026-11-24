@@ -16,18 +16,8 @@ import '../domain/calculos_operaciones.dart';
 
 final pesajesProvider = FutureProvider.autoDispose<List<Fila>>((ref) async {
   ref.watch(pendientesSincronizarProvider);
-  final enLinea = ref.watch(enLineaProvider);
-  final cache = ref.watch(datosOperadorProvider.select((m) => m['pesajes']));
-  List<Fila> locales() =>
-      ((cache as List?) ?? const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
-  if (!enLinea) return locales();
-  try {
-    final remotos = await ref.watch(repositorioOperacionesProvider).pesajes();
-    ref.read(datosOperadorProvider.notifier).guardarClave('pesajes', remotos);
-    return remotos;
-  } catch (_) {
-    return locales();
-  }
+  final repo = ref.watch(repositorioOperacionesProvider);
+  return consultarConCopiaLocal(ref, 'pesajes', remoto: () => repo.pesajes(), local: filasDeCopia);
 });
 
 /// RF-07 Recepción y báscula: pesaje en 3 pasos con botones grandes y registros pendientes de sincronizar.
@@ -164,7 +154,28 @@ class _BasculaPaginaState extends ConsumerState<BasculaPagina> {
                 color: rechazados.isEmpty ? Colores.exito : Colores.peligro),
           ]),
           for (final r in rechazados)
-            Aviso('${r.descripcion}: ${r.motivo}. Vuelva a registrarlo con los datos correctos.', tipo: 'error'),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.report_problem_outlined, color: Colores.peligro),
+                title: Text(r.descripcion),
+                subtitle: Text('${r.motivo ?? 'Rechazado por el servidor'}. Corrija el dato y reintente, o descártelo y '
+                    'vuelva a registrarlo.'),
+                trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                  IconButton(
+                    tooltip: 'Reintentar el envío',
+                    icon: const Icon(Icons.refresh),
+                    onPressed: () => ref.read(colaProvider.notifier).reintentar(r.id),
+                  ),
+                  IconButton(
+                    tooltip: 'Descartar',
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () => ref.read(colaProvider.notifier).descartar(r.id),
+                  ),
+                ]),
+              ),
+            ),
+          for (final r in pendientes.where((x) => x.ultimoError != null))
+            Aviso('${r.descripcion}: sigue guardado en el teléfono (${r.intentos} intentos). ${r.ultimoError}', tipo: 'alerta'),
           if (granos.isEmpty) const Aviso('Conéctese una vez para descargar los granos, productores y órdenes de su centro.', tipo: 'alerta'),
           Card(
             child: Padding(
