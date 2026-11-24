@@ -47,6 +47,13 @@ app.*.map.json
 # Widget Preview related
 .widget_preview/
 .env
+
+# Desktop and iOS scaffolding (app target is Android and Web)
+/ios/
+/linux/
+/macos/
+/windows/
+
 .env.*
 *.keystore
 *.jks
