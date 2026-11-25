@@ -151,7 +151,8 @@ void main() {
     final despues = ((await op.rpc('despachos_pendientes')).cuerpo as List).firstWhere((x) => x['nota_id'] == nota['nota_id'])['reservado_sede'];
     obtenido('CP-13', '$r · saldo antes $antes, después $despues');
     expect(r.estado, isNot(200));
-    expect(r.mensaje, contains('supera el saldo'));
+    // Desde 20261124120000 el despacho se limita a lo reservado para ESA venta en el centro (más estricto que el saldo).
+    expect(r.mensaje, anyOf(contains('supera el saldo'), contains('supera lo reservado')));
     expect((despues as num).toInt(), antes);
   });
 

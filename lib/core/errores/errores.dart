@@ -55,7 +55,10 @@ ErrorNegocio traducirError(Object error, {String? codigo, String? mensaje, Strin
   final c = codigo ?? '';
   final m = mensaje ?? error.toString();
   final ml = m.toLowerCase();
-  if (c == 'red' || esErrorRed(error, m)) {
+  // Un código SQLSTATE o de PostgREST significa que el servidor respondió: no es falta de señal aunque el texto
+  // diga «sin conexión» (si se tomara por red, el registro bloquearía la cola para siempre).
+  final respondio = RegExp(r'^([0-9A-Z]{5}|PGRST\d+)$').hasMatch(c);
+  if (c == 'red' || (!respondio && esErrorRed(error, m))) {
     return const ErrorNegocio('Sin conexión con el servidor. Revise su internet e intente de nuevo.', codigo: 'red');
   }
   // Token vencido o inválido (PostgREST PGRST301/302/303, Auth 401): se renueva la sesión y se reintenta.

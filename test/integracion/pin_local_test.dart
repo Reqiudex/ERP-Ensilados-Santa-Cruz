@@ -28,9 +28,9 @@ void main() {
     final pin = PinLocal(almacen);
     const perfil = Perfil(
       id: 'u-op-sr',
-      nombre: 'MARIO VARGAS',
-      ci: '7654321',
-      correo: 'operador.sanramon@ensilados.demo',
+      nombre: 'JUAN CARLOS RIVERO',
+      ci: '9876543',
+      correo: 'sanramon@ensilados.demo',
       rol: Rol.operadorCentro,
       sedeId: '22222222-2222-2222-2222-222222222222',
       sede: 'Centro San Ramón',
@@ -46,13 +46,13 @@ void main() {
     expect(recuperado?.sedeId, perfil.sedeId);
 
     // Verifica login offline tanto con CI como con correo institucional.
-    final porCi = await pin.verificarCredencialesOffline('7654321', 'Ensilados2026!');
+    final porCi = await pin.verificarCredencialesOffline('9876543', 'Ensilados2026!');
     expect(porCi?.id, perfil.id);
-    final porCorreo = await pin.verificarCredencialesOffline('OPERADOR.SANRAMON@ensilados.demo', 'Ensilados2026!');
+    final porCorreo = await pin.verificarCredencialesOffline('SANRAMON@ensilados.demo', 'Ensilados2026!');
     expect(porCorreo?.id, perfil.id);
 
     // Rechaza clave incorrecta o usuario distinto.
-    expect(await pin.verificarCredencialesOffline('7654321', 'ClaveErronea1!'), isNull);
+    expect(await pin.verificarCredencialesOffline('9876543', 'ClaveErronea1!'), isNull);
     expect(await pin.verificarCredencialesOffline('9999999', 'Ensilados2026!'), isNull);
   });
 }

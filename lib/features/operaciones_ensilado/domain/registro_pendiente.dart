@@ -60,6 +60,11 @@ class RegistroPendiente {
   RegistroPendiente conError(String m) => RegistroPendiente(
       id: id, tabla: tabla, datos: datos, creado: creado, usuario: usuario, intentos: intentos + 1, ultimoError: m);
 
+  /// Mismo registro pendiente con los datos completados antes del envío (peso de báscula de un despacho sin enviar).
+  RegistroPendiente conDatos(Map<String, dynamic> d) => RegistroPendiente(
+      id: id, tabla: tabla, datos: d, creado: creado, estado: estado, motivo: motivo, usuario: usuario,
+      intentos: intentos, ultimoError: ultimoError);
+
   /// Vuelve a la cola un registro rechazado (el operador decide reintentarlo).
   RegistroPendiente reintentar() =>
       RegistroPendiente(id: id, tabla: tabla, datos: datos, creado: creado, usuario: usuario);

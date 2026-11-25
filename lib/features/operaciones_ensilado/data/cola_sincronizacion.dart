@@ -12,16 +12,18 @@ import '../../../core/supabase/api.dart';
 import '../../comercial_abastecimiento/data/repositorio_comercial_supabase.dart';
 import '../../inventario_multisede/data/repositorio_inventario_supabase.dart';
 import '../../seguridad_accesos/data/pin_local.dart';
+import '../../seguridad_accesos/domain/roles_y_permisos.dart';
 import '../../seguridad_accesos/presentation/sesion.dart';
 import '../domain/calculos_operaciones.dart';
 import '../domain/registro_pendiente.dart';
 import 'repositorio_operaciones_supabase.dart';
 
 /// Catálogos base predeterminados de Ensilados Santa Cruz para poder trabajar desde el primer arranque aunque no haya señal.
+/// Mismos valores que la tabla «granos» de la base (se reemplazan por los del servidor en la primera sincronización).
 const List<Map<String, dynamic>> granosPredeterminados = [
-  {'id': 1, 'nombre': 'Maíz', 'humedad_estandar': 14.0, 'dias_fermentacion': 21, 'rollos_ton_min': 1.0, 'rollos_ton_max': 1.4},
-  {'id': 2, 'nombre': 'Sorgo', 'humedad_estandar': 14.0, 'dias_fermentacion': 21, 'rollos_ton_min': 1.0, 'rollos_ton_max': 1.4},
-  {'id': 3, 'nombre': 'Soya', 'humedad_estandar': 13.0, 'dias_fermentacion': 25, 'rollos_ton_min': 0.95, 'rollos_ton_max': 1.35},
+  {'id': 1, 'nombre': 'Maíz', 'humedad_estandar': 14.0, 'dias_fermentacion': 21, 'rollos_ton_min': 1.1, 'rollos_ton_max': 1.3},
+  {'id': 2, 'nombre': 'Sorgo', 'humedad_estandar': 14.0, 'dias_fermentacion': 21, 'rollos_ton_min': 1.12, 'rollos_ton_max': 1.35},
+  {'id': 3, 'nombre': 'Soya', 'humedad_estandar': 14.0, 'dias_fermentacion': 21, 'rollos_ton_min': 1.05, 'rollos_ton_max': 1.25},
 ];
 
 const List<Map<String, dynamic>> sedesPredeterminadas = [
@@ -52,6 +54,7 @@ const Map<String, String> skusInsumosOffline = {
 /// servidor ocupado dejan el registro pendiente para el siguiente intento.
 class ColaSincronizacion extends Notifier<List<RegistroPendiente>> {
   static const _clave = 'cola_pendientes_v2';
+  static const _claveAnterior = 'cola_sincronizacion_v1';
   static const _intentosMaximos = 8;
   static const _uuid = Uuid();
 
@@ -66,17 +69,49 @@ class ColaSincronizacion extends Notifier<List<RegistroPendiente>> {
   }
 
   Future<void> _cargar() async {
+    var guardados = <RegistroPendiente>[];
     try {
       final texto = await ref.read(almacenSeguroProvider).leer(_clave);
-      if (texto == null || texto.isEmpty) return;
-      final guardados = (jsonDecode(texto) as List)
-          .whereType<Map>()
-          .map((e) => RegistroPendiente.desdeJson(Map<String, dynamic>.from(e)))
-          .toList();
-      final ids = state.map((r) => r.id).toSet();
-      state = [...guardados.where((r) => !ids.contains(r.id)), ...state];
+      if (texto != null && texto.isNotEmpty) {
+        guardados = (jsonDecode(texto) as List)
+            .whereType<Map>()
+            .map((e) => RegistroPendiente.desdeJson(Map<String, dynamic>.from(e)))
+            .toList();
+      }
     } catch (_) {
       // Un almacén ilegible no debe impedir seguir registrando.
+    }
+    final anteriores = await _colaVersionAnterior();
+    final ids = state.map((r) => r.id).toSet();
+    final vistos = <String>{};
+    state = [
+      for (final r in [...guardados, ...anteriores])
+        if (!ids.contains(r.id) && vistos.add(r.id)) r,
+      ...state,
+    ];
+    if (anteriores.isNotEmpty) {
+      // La cola pasa al almacén cifrado antes de borrar la copia de la versión anterior.
+      await _persistir();
+      try {
+        await (await ref.read(almacenPersistenteProvider.future)).delete(_claveAnterior);
+      } catch (_) {}
+    }
+  }
+
+  /// Registros que la versión anterior de la app dejó pendientes en SQLite (clave «cola_sincronizacion_v1»):
+  /// se recuperan al actualizar el APK para no perder lo registrado sin señal antes de la actualización.
+  Future<List<RegistroPendiente>> _colaVersionAnterior() async {
+    try {
+      final almacen = await ref.read(almacenPersistenteProvider.future);
+      final d = await almacen.read(_claveAnterior);
+      if (d == null || d.data.isEmpty) return const [];
+      return (jsonDecode(d.data) as List)
+          .whereType<Map>()
+          .map((e) => RegistroPendiente.desdeJson(Map<String, dynamic>.from(e)))
+          .where((r) => tablasSinConexion.contains(r.tabla))
+          .toList();
+    } catch (_) {
+      return const [];
     }
   }
 
@@ -99,6 +134,19 @@ class ColaSincronizacion extends Notifier<List<RegistroPendiente>> {
   Future<String> registrar(String tabla, Map<String, dynamic> datos) async {
     if (!tablasSinConexion.contains(tabla)) throw ArgumentError('$tabla exige conexión');
     await _carga;
+    // El peso de báscula pública de un despacho que aún no se envió viaja dentro de ese despacho: en el servidor el
+    // despacho recibe otro identificador y una operación aparte sobre el id del teléfono se rechazaría.
+    if (tabla == 'registrar_peso_bascula') {
+      final despacho = state.where((r) => !r.rechazado && r.tabla == 'registrar_despacho' && r.id == datos['despacho_id']);
+      if (despacho.isNotEmpty) {
+        final r = despacho.first;
+        _reemplazar(r.conDatos({...r.datos, 'peso_bascula': datos['peso']}));
+        await _persistir();
+        ref.read(datosOperadorProvider.notifier).aplicarMovimientoLocal(tabla, datos);
+        if (ref.read(enLineaProvider)) unawaited(sincronizar());
+        return r.id;
+      }
+    }
     final id = (datos['id'] as String?) ?? _uuid.v4();
     final r = RegistroPendiente(
       id: id,
@@ -264,14 +312,25 @@ class DatosOperador extends Notifier<Map<String, dynamic>> {
     state = {...state, clave: valor, 'actualizado': DateTime.now().toIso8601String()};
   }
 
+  /// Roles que registran en un centro y necesitan la copia local para trabajar sin señal. Para los demás no se
+  /// descarga: sus consultas de centro se rechazarían (403) y llenarían la bitácora de accesos denegados.
+  static bool usaCopiaLocal(Rol? rol) => rol == Rol.operadorCentro || rol == Rol.gerenteGeneral || rol == Rol.superadmin;
+
   Future<void> refrescar() async {
     if (!ref.read(enLineaProvider)) return;
+    final perfil = ref.read(perfilProvider);
+    if (perfil == null || !usaCopiaLocal(perfil.rol)) return;
     final repoOp = ref.read(repositorioOperacionesProvider);
     final repoInv = ref.read(repositorioInventarioProvider);
     final repoCom = ref.read(repositorioComercialProvider);
     final api = ref.read(apiProvider);
-    final perfil = ref.read(perfilProvider);
-    final nuevo = {...state};
+    // La copia es de una sola cuenta: si en el teléfono ingresa otra, se descarta la anterior (no se ven datos de
+    // otro centro). La cola de registros pendientes no se toca.
+    final propia = state['usuario'] == null || state['usuario'] == perfil.id;
+    final nuevo = <String, dynamic>{
+      ...(propia ? state : const {'granos': granosPredeterminados, 'sedes': sedesPredeterminadas}),
+      'usuario': perfil.id,
+    };
 
     Future<void> intentar(String clave, Future<Object?> Function() f) async {
       try {
@@ -318,10 +377,8 @@ class DatosOperador extends Notifier<Map<String, dynamic>> {
     await intentar('existencias', () => repoInv.existencias());
     await intentar('guias', () => repoInv.guias());
     await intentar('mis_solicitudes', () => api.rpcLista('mis_solicitudes'));
-    if (perfil != null) {
-      await intentar('despachos_pendientes', () => repoCom.despachosPendientes());
-      await intentar('despachos', () => repoCom.despachos());
-    }
+    await intentar('despachos_pendientes', () => repoCom.despachosPendientes());
+    await intentar('despachos', () => repoCom.despachos());
 
     nuevo['actualizado'] = DateTime.now().toIso8601String();
     state = nuevo;
