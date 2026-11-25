@@ -7,4 +7,5 @@ cd "$(dirname "$0")/.."
 flutter analyze --no-fatal-infos
 flutter build web --release
 rm -rf publicado/web && mkdir -p publicado && cp -r build/web publicado/web
+python3 scripts/versionar_web.py publicado/web
 echo "Listo: publicado/web actualizado ($(du -sh publicado/web | cut -f1))."
