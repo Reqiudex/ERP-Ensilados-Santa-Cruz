@@ -25,6 +25,8 @@ delete from public.consumos_insumo;
 delete from public.lotes;
 delete from public.pesajes;
 delete from public.ordenes_ensilado;
+-- Operaciones del teléfono ya aplicadas (idempotencia de la cola): sin los datos, un reenvío debe volver a aplicarse.
+delete from app.operaciones_dispositivo;
 
 -- Catálogos: solo los del seed
 delete from public.productos where id not in (
