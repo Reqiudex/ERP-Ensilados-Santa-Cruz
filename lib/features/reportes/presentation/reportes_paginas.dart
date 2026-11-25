@@ -13,6 +13,10 @@ import '../domain/calculos_reportes.dart';
 
 typedef Periodo = ({DateTime desde, DateTime hasta});
 
+/// Clave de la copia local de un reporte: una por período, para que sin señal no se muestre otro período.
+String _clavePeriodo(String reporte, Periodo p) =>
+    '${reporte}_${p.desde.toIso8601String().substring(0, 10)}_${p.hasta.toIso8601String().substring(0, 10)}';
+
 /// Inicio de los datos del sistema (primera campaña registrada).
 final inicioDatos = DateTime(2026, 8, 1);
 
@@ -115,7 +119,7 @@ class Barras extends StatelessWidget {
 // ------------------------------------------------------------------------------------------------
 final _rendimientoProvider = FutureProvider.autoDispose.family<List<Fila>, Periodo>((ref, p) async {
   final repo = ref.watch(repositorioReportesProvider);
-  return consultarConCopiaLocal(ref, 'reporte_rendimiento', remoto: () => repo.rendimiento(p.desde, p.hasta), local: filasDeCopia);
+  return consultarConCopiaLocal(ref, _clavePeriodo('reporte_rendimiento', p), remoto: () => repo.rendimiento(p.desde, p.hasta), local: filasDeCopia);
 });
 
 class ReporteRendimientoPagina extends ConsumerStatefulWidget {
@@ -188,11 +192,11 @@ class _ReporteRendimientoPaginaState extends ConsumerState<ReporteRendimientoPag
 // ------------------------------------------------------------------------------------------------
 final _existenciasProvider = FutureProvider.autoDispose<List<Fila>>((ref) async {
   final repo = ref.watch(repositorioReportesProvider);
-  return consultarConCopiaLocal(ref, 'existencias', remoto: () => repo.existencias(), local: filasDeCopia);
+  return consultarConCopiaLocal(ref, 'reporte_existencias', remoto: () => repo.existencias(), local: filasDeCopia);
 });
 final _rotacionProvider = FutureProvider.autoDispose.family<List<Fila>, Periodo>((ref, p) async {
   final repo = ref.watch(repositorioReportesProvider);
-  return consultarConCopiaLocal(ref, 'reporte_rotacion', remoto: () => repo.rotacion(p.desde, p.hasta), local: filasDeCopia);
+  return consultarConCopiaLocal(ref, _clavePeriodo('reporte_rotacion', p), remoto: () => repo.rotacion(p.desde, p.hasta), local: filasDeCopia);
 });
 
 class ReporteExistenciasPagina extends ConsumerStatefulWidget {
@@ -375,7 +379,7 @@ class _ReporteVentasPaginaState extends ConsumerState<ReporteVentasPagina> {
 // ------------------------------------------------------------------------------------------------
 final _mermasProvider = FutureProvider.autoDispose.family<Fila, Periodo>((ref, p) async {
   final repo = ref.watch(repositorioReportesProvider);
-  return consultarConCopiaLocal<Fila>(ref, 'reporte_mermas',
+  return consultarConCopiaLocal<Fila>(ref, _clavePeriodo('reporte_mermas', p),
       remoto: () => repo.mermas(p.desde, p.hasta),
       local: (c) => c is Map ? Map<String, dynamic>.from(c) : <String, dynamic>{'bajas': <Fila>[], 'por_sede': <Fila>[]});
 });

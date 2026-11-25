@@ -1,6 +1,10 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Exportar PDF y Excel a Descargas en Android 8 y 9 (file_saver ya lo limita a la API 28). El permiso de lectura
+         lo agregaba de forma implícita la fusión de manifiestos y la app no lo usa. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
     <application
         android:label="ERP Ensilados"
         android:name="${applicationName}"
