@@ -52,10 +52,10 @@ class _Marco extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 if (!ancho) ...[
-                  const Image(image: AssetImage('assets/marca/logo_verde.png'), height: 70),
+                  Image(image: AssetImage(Theme.of(context).brightness == Brightness.dark ? 'assets/marca/logo_blanco.png' : 'assets/marca/logo_verde.png'), height: 70),
                   const SizedBox(height: 12),
-                  const Text('Ensilados Santa Cruz',
-                      style: TextStyle(color: Colores.primario, fontSize: 22, fontWeight: FontWeight.w800)),
+                  Text('Ensilados Santa Cruz',
+                      style: TextStyle(color: context.paleta.primario, fontSize: 22, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 20),
                 ],
                 tarjeta,
@@ -135,7 +135,7 @@ class _IngresoPaginaState extends ConsumerState<IngresoPagina> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
             const Text('Iniciar sesión', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
-            const Text('Ingrese con su CI o su correo institucional.', style: TextStyle(color: Colores.textoSuave)),
+            Text('Ingrese con su CI o su correo institucional.', style: TextStyle(color: context.paleta.textoSuave)),
             const SizedBox(height: 24),
             if (mensaje != null) Aviso(mensaje, tipo: 'alerta'),
             TextFormField(
@@ -166,15 +166,15 @@ class _IngresoPaginaState extends ConsumerState<IngresoPagina> {
             FilledButton.icon(
               onPressed: _ocupado ? null : _entrar,
               icon: _ocupado
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.login),
               label: const Text('Ingresar'),
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'Tras 3 intentos fallidos la cuenta se bloquea 15 minutos. La sesión se cierra tras 15 minutos sin uso. '
               'Las cuentas las crea el administrador: no hay autorregistro.',
-              style: TextStyle(fontSize: 12, color: Colores.textoSuave),
+              style: TextStyle(fontSize: 12, color: context.paleta.textoSuave),
             ),
           ]),
         ),
@@ -345,15 +345,15 @@ class _PinPaginaState extends ConsumerState<PinPagina> {
         );
     return _Marco(
       hijo: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(widget.configurar ? Icons.pin_outlined : Icons.lock_outline, size: 40, color: Colores.primario),
+        Icon(widget.configurar ? Icons.pin_outlined : Icons.lock_outline, size: 40, color: context.paleta.primario),
         const SizedBox(height: 8),
         Text(widget.configurar ? 'Configurar PIN sin conexión' : 'Desbloquear con PIN',
             style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-        if (perfil != null) Text('${perfil.nombre} · ${perfil.sede}', style: const TextStyle(color: Colores.textoSuave)),
+        if (perfil != null) Text('${perfil.nombre} · ${perfil.sede}', style: TextStyle(color: context.paleta.textoSuave)),
         const SizedBox(height: 8),
         if (!widget.configurar)
-          const Text('Sin señal: use su PIN personal. Tres errores o 12 horas sin sincronizar exigen iniciar sesión en línea.',
-              textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colores.textoSuave)),
+          Text('Sin señal: use su PIN personal. Tres errores o 12 horas sin sincronizar exigen iniciar sesión en línea.',
+              textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: context.paleta.textoSuave)),
         if (!esAndroid && !widget.configurar)
           const Padding(padding: EdgeInsets.only(top: 8), child: Aviso('El PIN sin conexión solo existe en la app Android.')),
         const SizedBox(height: 16),
@@ -365,13 +365,13 @@ class _PinPaginaState extends ConsumerState<PinPagina> {
               height: 16,
               decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: i < _pin.length ? Colores.primario : Colores.borde),
+                  color: i < _pin.length ? context.paleta.primario : context.paleta.borde),
             ),
         ]),
         if (_mensaje != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: Text(_mensaje!, style: TextStyle(color: _error ? Colores.peligro : Colores.textoSuave)),
+            child: Text(_mensaje!, style: TextStyle(color: _error ? context.paleta.peligro : context.paleta.textoSuave)),
           ),
         const SizedBox(height: 16),
         Wrap(spacing: 10, runSpacing: 10, alignment: WrapAlignment.center, children: [

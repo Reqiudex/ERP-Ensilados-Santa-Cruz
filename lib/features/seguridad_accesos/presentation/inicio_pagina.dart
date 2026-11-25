@@ -126,28 +126,28 @@ class _Indicadores extends ConsumerWidget {
           TarjetaDato(titulo: 'Usuarios activos', valor: '${u.where((x) => x['estado'] == 'activo').length}', icono: Icons.people_alt_outlined,
               detalle: '${u.length} cuentas en total', alTocar: () => context.go('/seguridad/usuarios')),
           TarjetaDato(titulo: 'Sesiones abiertas', valor: '${l('sesiones').length}', icono: Icons.devices_outlined,
-              color: Colores.info, alTocar: () => context.go('/seguridad/sesiones')),
+              color: context.paleta.info, alTocar: () => context.go('/seguridad/sesiones')),
           TarjetaDato(
               titulo: 'Último respaldo',
               valor: l('respaldos').where((x) => x['accion'] == 'respaldo').isEmpty
                   ? 'Sin datos'
                   : fecha(l('respaldos').firstWhere((x) => x['accion'] == 'respaldo')['fecha']),
               icono: Icons.backup_outlined,
-              color: Colores.ambarOscuro,
+              color: context.paleta.ambarOscuro,
               alTocar: () => context.go('/seguridad/mantenimiento')),
         ]);
       case Rol.operadorCentro:
         final pendientes = ref.watch(pendientesSincronizarProvider);
         final lotes = l('lotes');
         tarjetas.addAll([
-          TarjetaDato(titulo: 'Por sincronizar', valor: '$pendientes', icono: Icons.sync, color: pendientes > 0 ? Colores.alerta : Colores.exito,
+          TarjetaDato(titulo: 'Por sincronizar', valor: '$pendientes', icono: Icons.sync, color: pendientes > 0 ? context.paleta.alerta : context.paleta.exito,
               alTocar: () => context.go('/operaciones/bascula')),
           TarjetaDato(titulo: 'Órdenes abiertas', valor: '${l('ordenes').length}', icono: Icons.precision_manufacturing_outlined,
               alTocar: () => context.go('/operaciones/ordenes')),
           TarjetaDato(titulo: 'Lotes en fermentación', valor: '${lotes.where((x) => x['estado'] == 'fermentacion').length}',
-              icono: Icons.thermostat_outlined, color: Colores.ambarOscuro, alTocar: () => context.go('/operaciones/fermentacion')),
+              icono: Icons.thermostat_outlined, color: context.paleta.ambarOscuro, alTocar: () => context.go('/operaciones/fermentacion')),
           TarjetaDato(titulo: 'Guías por recibir', valor: '${l('guias').where((g) => g['sede_destino'] == perfil.sedeId).length}',
-              icono: Icons.local_shipping_outlined, color: Colores.info, alTocar: () => context.go('/inventario/guias')),
+              icono: Icons.local_shipping_outlined, color: context.paleta.info, alTocar: () => context.go('/inventario/guias')),
           TarjetaDato(titulo: 'Despachos pendientes', valor: '${l('despachos').length}', icono: Icons.fire_truck_outlined,
               alTocar: () => context.go('/comercial/despachos')),
         ]);
@@ -162,23 +162,23 @@ class _Indicadores extends ConsumerWidget {
             .fold<double>(0, (a, n) => a + aNumero(n['total']));
         if (perfil.rol.comoGerente) {
           tarjetas.add(TarjetaDato(titulo: 'Solicitudes por aprobar', valor: '${l('bandeja').length}', icono: Icons.fact_check_outlined,
-              color: l('bandeja').isEmpty ? Colores.exito : Colores.peligro, alTocar: () => context.go('/seguridad/aprobaciones')));
+              color: l('bandeja').isEmpty ? context.paleta.exito : context.paleta.peligro, alTocar: () => context.go('/seguridad/aprobaciones')));
           final alertas = l('rendimiento').where((x) => '${x['dictamen_rendimiento']}'.startsWith('Alerta')).length;
           tarjetas.add(TarjetaDato(titulo: 'Alertas de rendimiento', valor: '$alertas', icono: Icons.warning_amber_rounded,
-              color: alertas > 0 ? Colores.alerta : Colores.exito, alTocar: () => context.go('/reportes/rendimiento')));
+              color: alertas > 0 ? context.paleta.alerta : context.paleta.exito, alTocar: () => context.go('/reportes/rendimiento')));
         }
         tarjetas.addAll([
           TarjetaDato(titulo: 'Rollos aptos para venta', valor: entero(aptos), icono: Icons.inventory_2_outlined,
               alTocar: () => context.go('/inventario/sedes')),
           TarjetaDato(titulo: 'Cartera por cobrar', valor: bs(cartera), icono: Icons.account_balance_wallet_outlined,
-              color: Colores.ambarOscuro, alTocar: () => context.go('/reportes/ventas')),
-          TarjetaDato(titulo: 'Ventas del mes', valor: bs(ventasMes), icono: Icons.point_of_sale_outlined, color: Colores.info,
+              color: context.paleta.ambarOscuro, alTocar: () => context.go('/reportes/ventas')),
+          TarjetaDato(titulo: 'Ventas del mes', valor: bs(ventasMes), icono: Icons.point_of_sale_outlined, color: context.paleta.info,
               alTocar: () => context.go('/comercial/ventas')),
         ]);
         if (perfil.rol != Rol.ejecutivoComercial) {
           final porPagar = l('compras').where((c) => c['estado'] == 'aprobada').fold<double>(0, (a, c) => a + aNumero(c['saldo']));
           tarjetas.add(TarjetaDato(titulo: 'Compras por pagar', valor: bs(porPagar), icono: Icons.payments_outlined,
-              color: Colores.peligro, alTocar: () => context.go('/comercial/compras')));
+              color: context.paleta.peligro, alTocar: () => context.go('/comercial/compras')));
         }
     }
     return FilaTarjetas(tarjetas);

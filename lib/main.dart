@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/router/rutas.dart';
 import 'core/supabase/supabase_config.dart';
+import 'core/tema/modo_tema.dart';
 import 'core/tema/tema.dart';
 
 Future<void> main() async {
@@ -29,6 +30,8 @@ class AplicacionErp extends ConsumerWidget {
       title: 'ERP Ensilados Santa Cruz',
       debugShowCheckedModeBanner: false,
       theme: temaSistema(),
+      darkTheme: temaOscuro(),
+      themeMode: ref.watch(modoTemaProvider),
       routerConfig: ref.watch(routerProvider),
       locale: const Locale('es', 'BO'),
       supportedLocales: const [Locale('es', 'BO'), Locale('es')],

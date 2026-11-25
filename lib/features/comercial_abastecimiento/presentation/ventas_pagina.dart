@@ -83,8 +83,8 @@ class _VentasPaginaState extends ConsumerState<VentasPagina> {
           return Column(children: [
             FilaTarjetas([
               TarjetaDato(titulo: 'Notas emitidas', valor: '${l.where((n) => n['estado'] == 'emitida').length}', icono: Icons.receipt_long_outlined),
-              TarjetaDato(titulo: 'Por cobrar', valor: bs(porCobrar.fold<double>(0, (a, n) => a + aNumero(n['saldo']))), icono: Icons.account_balance_wallet_outlined, color: Colores.ambarOscuro),
-              TarjetaDato(titulo: 'Pendientes de aprobación', valor: '${l.where((n) => n['estado'] == 'pendiente').length}', icono: Icons.hourglass_top, color: Colores.alerta),
+              TarjetaDato(titulo: 'Por cobrar', valor: bs(porCobrar.fold<double>(0, (a, n) => a + aNumero(n['saldo']))), icono: Icons.account_balance_wallet_outlined, color: context.paleta.ambarOscuro),
+              TarjetaDato(titulo: 'Pendientes de aprobación', valor: '${l.where((n) => n['estado'] == 'pendiente').length}', icono: Icons.hourglass_top, color: context.paleta.alerta),
             ]),
             TablaDatos(
               titulo: 'Notas de venta',
@@ -120,7 +120,7 @@ class _VentasPaginaState extends ConsumerState<VentasPagina> {
                 if (ejecutivo && n['estado'] != 'anulada')
                   IconButton(
                     tooltip: 'Solicitar anulación',
-                    icon: const Icon(Icons.block, color: Colores.peligro),
+                    icon: Icon(Icons.block, color: context.paleta.peligro),
                     onPressed: () async {
                       final m = await pedirTexto(context, 'Solicitar anulación de la nota N.º ${n['numero']}', minimo: 10);
                       if (m == null || !context.mounted) return;

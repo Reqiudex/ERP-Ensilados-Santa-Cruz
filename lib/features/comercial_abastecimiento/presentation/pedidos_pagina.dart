@@ -77,7 +77,7 @@ class _PedidosPaginaState extends ConsumerState<PedidosPagina> {
                             if (p['estado'] == 'cotizacion' || p['estado'] == 'pedido')
                               IconButton(
                                 tooltip: 'Cancelar',
-                                icon: const Icon(Icons.cancel_outlined, color: Colores.peligro),
+                                icon: Icon(Icons.cancel_outlined, color: context.paleta.peligro),
                                 onPressed: () async {
                                   if (!await confirmar(context, 'Cancelar pedido', 'Se liberarán los rollos reservados.')) return;
                                   if (!context.mounted) return;
@@ -161,7 +161,7 @@ class _PedidosPaginaState extends ConsumerState<PedidosPagina> {
                 '${peps != null ? 'PEPS propone el lote ${peps.codigo} (sellado el ${fecha(peps.fechaSellado.toIso8601String())}).' : 'No hay lotes aptos.'}'),
             if (n > 0)
               Card(
-                color: Colores.primarioClaro.withValues(alpha: .3),
+                color: context.paleta.primarioClaro.withValues(alpha: .3),
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Text(

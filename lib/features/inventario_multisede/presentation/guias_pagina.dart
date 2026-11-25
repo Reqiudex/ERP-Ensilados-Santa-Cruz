@@ -66,12 +66,12 @@ class GuiasPagina extends ConsumerWidget {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        const CircleAvatar(backgroundColor: Colores.primarioClaro, child: Icon(Icons.local_shipping, color: Colores.primario)),
+                        CircleAvatar(backgroundColor: context.paleta.primarioClaro, child: Icon(Icons.local_shipping, color: context.paleta.primario)),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Text('Guía N.º ${g['numero']} desde ${g['origen']?['nombre']}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                            Text('${_detalle(g)} · emitida ${fechaHora(g['fecha_emision'])}', style: const TextStyle(color: Colores.textoSuave)),
+                            Text('${_detalle(g)} · emitida ${fechaHora(g['fecha_emision'])}', style: TextStyle(color: context.paleta.textoSuave)),
                             const SizedBox(height: 8),
                             FilledButton.icon(
                                 onPressed: () => _recibir(context, ref, g),
@@ -144,7 +144,7 @@ class GuiasPagina extends ConsumerWidget {
           Expanded(child: TextField(controller: cant, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Rollos'))),
           IconButton(
             tooltip: 'Agregar',
-            icon: const Icon(Icons.add_circle, color: Colores.primario),
+            icon: Icon(Icons.add_circle, color: context.paleta.primario),
             onPressed: () {
               final n = int.tryParse(cant.text) ?? 0;
               if (lote == null || n <= 0) return;

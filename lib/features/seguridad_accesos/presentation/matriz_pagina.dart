@@ -25,11 +25,11 @@ class MatrizPagina extends ConsumerWidget {
     // El superadministrador solo aparece para otro superadministrador.
     final roles = mio == Rol.superadmin ? Rol.values : Rol.deLaMatriz;
     Color color(Acceso a) => switch (a) {
-          Acceso.r => Colores.primario,
-          Acceso.s => Colores.info,
-          Acceso.a => Colores.ambarOscuro,
-          Acceso.c => Colores.textoSuave,
-          Acceso.v => Colores.exito,
+          Acceso.r => context.paleta.primario,
+          Acceso.s => context.paleta.info,
+          Acceso.a => context.paleta.ambarOscuro,
+          Acceso.c => context.paleta.textoSuave,
+          Acceso.v => context.paleta.exito,
         };
     return Pagina(
       etiquetaRf: 'Seguridad y Accesos · RF-02',
@@ -40,7 +40,7 @@ class MatrizPagina extends ConsumerWidget {
         Wrap(spacing: 8, runSpacing: 8, children: [
           for (final a in Acceso.values)
             Chip(
-              avatar: CircleAvatar(backgroundColor: color(a), child: Text(a.letra, style: const TextStyle(color: Colors.white, fontSize: 11))),
+              avatar: CircleAvatar(backgroundColor: color(a), child: Text(a.letra, style: TextStyle(color: context.paleta.superficie, fontSize: 11))),
               label: Text(a.descripcion),
             ),
         ]),
@@ -76,28 +76,28 @@ class MatrizPagina extends ConsumerWidget {
                           width: 96,
                           child: Text(r.nombreCorto,
                               maxLines: 2,
-                              style: TextStyle(color: r == mio ? Colores.primario : null, fontWeight: r == mio ? FontWeight.w800 : null)))),
+                              style: TextStyle(color: r == mio ? context.paleta.primario : null, fontWeight: r == mio ? FontWeight.w800 : null)))),
               ],
               rows: [
                 for (final o in matrizPermisos)
                   DataRow(cells: [
-                    DataCell(Text(o.modulo, style: const TextStyle(color: Colores.textoSuave))),
+                    DataCell(Text(o.modulo, style: TextStyle(color: context.paleta.textoSuave))),
                     DataCell(SizedBox(width: 260, child: Text(o.operacion))),
                     for (final r in roles)
                       DataCell(Container(
-                        color: r == mio ? Colores.primarioClaro.withValues(alpha: .25) : null,
+                        color: r == mio ? context.paleta.primarioClaro.withValues(alpha: .25) : null,
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                         alignment: Alignment.centerLeft,
                         child: r == Rol.superadmin
                             ? const Text('Total')
                             : (o.accesos[r] ?? const []).isEmpty
-                            ? const Text('—', style: TextStyle(color: Colores.borde))
+                            ? Text('—', style: TextStyle(color: context.paleta.borde))
                             : Wrap(spacing: 4, children: [
                                 for (final a in o.accesos[r]!)
                                   CircleAvatar(
                                       radius: 12,
                                       backgroundColor: color(a),
-                                      child: Text(a.letra, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700))),
+                                      child: Text(a.letra, style: TextStyle(color: context.paleta.superficie, fontSize: 11, fontWeight: FontWeight.w700))),
                               ]),
                       )),
                   ]),
@@ -132,7 +132,7 @@ class _Regla extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Icon(Icons.shield_outlined, size: 18, color: Colores.primario),
+          Icon(Icons.shield_outlined, size: 18, color: context.paleta.primario),
           const SizedBox(width: 8),
           Expanded(child: Text(t)),
         ]),
@@ -199,7 +199,7 @@ class _RolExpandible extends StatelessWidget {
                             CircleAvatar(
                                 radius: 10,
                                 backgroundColor: color(a),
-                                child: Text(a.letra, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700))),
+                                child: Text(a.letra, style: TextStyle(color: context.paleta.superficie, fontSize: 10, fontWeight: FontWeight.w700))),
                             const SizedBox(width: 4),
                             Text(a.descripcion),
                           ]),

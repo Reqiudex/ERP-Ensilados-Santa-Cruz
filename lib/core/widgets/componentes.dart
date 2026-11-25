@@ -47,12 +47,12 @@ class Pagina extends StatelessWidget {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 if (etiquetaRf != null)
                   Text(etiquetaRf!.toUpperCase(),
-                      style: const TextStyle(fontSize: 12, letterSpacing: .8, color: Colores.ambarOscuro, fontWeight: FontWeight.w600)),
+                      style: TextStyle(fontSize: 12, letterSpacing: .8, color: context.paleta.ambarOscuro, fontWeight: FontWeight.w600)),
                 Text(titulo, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
                 if (subtitulo != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
-                    child: Text(subtitulo!, style: const TextStyle(color: Colores.textoSuave)),
+                    child: Text(subtitulo!, style: TextStyle(color: context.paleta.textoSuave)),
                   ),
               ]),
             ),
@@ -79,7 +79,7 @@ class TarjetaDato extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? Colores.primario;
+    final c = color ?? context.paleta.primario;
     return SizedBox(
       width: esAncho(context) ? 220 : (MediaQuery.sizeOf(context).width - 44) / 2,
       child: Card(
@@ -97,7 +97,7 @@ class TarjetaDato extends StatelessWidget {
                     child: Icon(icono, color: c, size: 20),
                   ),
                 const SizedBox(width: 10),
-                Expanded(child: Text(titulo, style: const TextStyle(color: Colores.textoSuave, fontSize: 13))),
+                Expanded(child: Text(titulo, style: TextStyle(color: context.paleta.textoSuave, fontSize: 13))),
               ]),
               const SizedBox(height: 12),
               // Una sola línea: si no cabe se achica (una fecha o un importe nunca se parte por la mitad).
@@ -106,7 +106,7 @@ class TarjetaDato extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 child: Text(valor, maxLines: 1, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: c)),
               ),
-              if (detalle != null) Text(detalle!, style: const TextStyle(fontSize: 12, color: Colores.textoSuave)),
+              if (detalle != null) Text(detalle!, style: TextStyle(fontSize: 12, color: context.paleta.textoSuave)),
             ]),
           ),
         ),
@@ -128,22 +128,22 @@ class Estado extends StatelessWidget {
   const Estado(this.valor, {super.key});
   final Object? valor;
 
-  static Color colorDe(String v) => switch (v) {
+  static Color colorDe(BuildContext context, String v) => switch (v) {
         'apto' || 'activo' || 'aprobada' || 'emitida' || 'pagada' || 'vigente' || 'recibida' || 'confirmado' ||
         'vendido' || 'cerrada' || 'integro' || 'despachado' || 'conforme' =>
-          Colores.exito,
+          context.paleta.exito,
         'pendiente' || 'fermentacion' || 'en_transito' || 'abierta' || 'cotizacion' || 'pedido' || 'inactivo' =>
-          Colores.alerta,
+          context.paleta.alerta,
         'rechazada' || 'anulada' || 'anulado' || 'bloqueado' || 'suspendido' || 'danado' || 'observado' ||
         'cancelado' || 'no_conforme' =>
-          Colores.peligro,
-        _ => Colores.info,
+          context.paleta.peligro,
+        _ => context.paleta.info,
       };
 
   @override
   Widget build(BuildContext context) {
     final v = '${valor ?? ''}';
-    final c = colorDe(v);
+    final c = colorDe(context, v);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(color: c.withValues(alpha: .12), borderRadius: BorderRadius.circular(20)),
@@ -168,7 +168,7 @@ class Seccion extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                if (icono != null) ...[Icon(icono, size: 20, color: Colores.primario), const SizedBox(width: 8)],
+                if (icono != null) ...[Icon(icono, size: 20, color: context.paleta.primario), const SizedBox(width: 8)],
                 Expanded(child: Text(titulo, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
                 ?accion,
               ]),
@@ -215,11 +215,11 @@ class MensajeVacio extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 16),
         child: Center(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icono, size: 44, color: Colores.textoSuave),
+            Icon(icono, size: 44, color: context.paleta.textoSuave),
             const SizedBox(height: 10),
             Text(titulo, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w600)),
             if (detalle != null)
-              Text(detalle!, textAlign: TextAlign.center, style: const TextStyle(color: Colores.textoSuave)),
+              Text(detalle!, textAlign: TextAlign.center, style: TextStyle(color: context.paleta.textoSuave)),
             if (accion != null) Padding(padding: const EdgeInsets.only(top: 12), child: accion),
           ]),
         ),
@@ -387,7 +387,7 @@ class _TablaDatosState extends State<TablaDatos> {
                             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                               SizedBox(
                                   width: 120,
-                                  child: Text(c.titulo, style: const TextStyle(color: Colores.textoSuave, fontSize: 13))),
+                                  child: Text(c.titulo, style: TextStyle(color: context.paleta.textoSuave, fontSize: 13))),
                               Expanded(child: c.celda?.call(f) ?? Text(c.valor(f), style: const TextStyle(fontWeight: FontWeight.w500))),
                             ]),
                           ),
@@ -416,7 +416,7 @@ class _TablaDatosState extends State<TablaDatos> {
           if (paginas > 1)
             Row(mainAxisAlignment: MainAxisAlignment.end, children: [
               Text('${filas.length} registros · página ${_pagina + 1} de $paginas',
-                  style: const TextStyle(color: Colores.textoSuave)),
+                  style: TextStyle(color: context.paleta.textoSuave)),
               IconButton(
                   onPressed: _pagina == 0 ? null : () => setState(() => _pagina--), icon: const Icon(Icons.chevron_left)),
               IconButton(
@@ -426,7 +426,7 @@ class _TablaDatosState extends State<TablaDatos> {
           else
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text('${filas.length} registros', style: const TextStyle(color: Colores.textoSuave, fontSize: 12)),
+              child: Text('${filas.length} registros', style: TextStyle(color: context.paleta.textoSuave, fontSize: 12)),
             ),
         ]),
       ),
@@ -442,8 +442,9 @@ void avisar(BuildContext context, String mensaje, {bool error = false}) {
       content: Row(children: [
         Icon(error ? Icons.error_outline : Icons.check_circle_outline, color: Colors.white),
         const SizedBox(width: 10),
-        Expanded(child: Text(mensaje)),
+        Expanded(child: Text(mensaje, style: const TextStyle(color: Colors.white))),
       ]),
+      // Fondo de marca fijo: el texto blanco se lee igual en tema claro y oscuro.
       backgroundColor: error ? Colores.peligro : Colores.primarioOscuro,
       duration: Duration(seconds: error ? 6 : 3),
     ));
@@ -534,7 +535,7 @@ Future<T?> dialogoFormulario<T>(BuildContext context, {required String titulo, r
                       }
                     },
               child: ocupado
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                   : Text(guardar),
             ),
           ],
@@ -552,7 +553,7 @@ class Aviso extends StatelessWidget {
   final IconData? icono;
   @override
   Widget build(BuildContext context) {
-    final c = switch (tipo) { 'alerta' => Colores.alerta, 'error' => Colores.peligro, 'ok' => Colores.exito, _ => Colores.info };
+    final c = switch (tipo) { 'alerta' => context.paleta.alerta, 'error' => context.paleta.peligro, 'ok' => context.paleta.exito, _ => context.paleta.info };
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12),

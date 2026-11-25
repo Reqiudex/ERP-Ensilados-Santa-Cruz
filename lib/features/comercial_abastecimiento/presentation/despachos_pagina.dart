@@ -63,7 +63,7 @@ class DespachosPagina extends ConsumerWidget {
                           if (d['pendiente_aprobacion'] == true) const Estado('pendiente'),
                         ]),
                         const SizedBox(height: 4),
-                        Text('${d['producto']} · lote ${d['lote']}', style: const TextStyle(color: Colores.textoSuave)),
+                        Text('${d['producto']} · lote ${d['lote']}', style: TextStyle(color: context.paleta.textoSuave)),
                         const SizedBox(height: 8),
                         Text(d['unidad'] == 'tonelada'
                             ? '${dec2(d['cantidad'])} t vendidas · ${d['rollos']} rollos'
@@ -194,7 +194,7 @@ class DespachosPagina extends ConsumerWidget {
           ]),
           const SizedBox(height: 12),
           Card(
-            color: (exceso ? Colores.peligro : Colores.exito).withValues(alpha: .08),
+            color: (exceso ? context.paleta.peligro : context.paleta.exito).withValues(alpha: .08),
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -208,8 +208,8 @@ class DespachosPagina extends ConsumerWidget {
                       child: LinearProgressIndicator(
                         minHeight: 8,
                         value: (total / minimo).clamp(0, 1.2) / 1.2,
-                        color: exceso ? Colores.peligro : Colores.exito,
-                        backgroundColor: Colores.borde,
+                        color: exceso ? context.paleta.peligro : context.paleta.exito,
+                        backgroundColor: context.paleta.borde,
                       ),
                     ),
                     const SizedBox(height: 4),

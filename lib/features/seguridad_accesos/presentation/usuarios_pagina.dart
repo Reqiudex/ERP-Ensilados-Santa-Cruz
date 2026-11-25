@@ -58,9 +58,9 @@ class _UsuariosPaginaState extends ConsumerState<UsuariosPagina> {
           return Column(children: [
             FilaTarjetas([
               TarjetaDato(titulo: 'Total de usuarios', valor: '${lista.length}', icono: Icons.people_alt_outlined),
-              TarjetaDato(titulo: 'Activos', valor: '${cuenta('activo')}', icono: Icons.verified_user_outlined, color: Colores.exito),
-              TarjetaDato(titulo: 'Suspendidos', valor: '${cuenta('suspendido')}', icono: Icons.pause_circle_outline, color: Colores.alerta),
-              TarjetaDato(titulo: 'Bloqueados', valor: '${cuenta('bloqueado')}', icono: Icons.lock_clock_outlined, color: Colores.peligro),
+              TarjetaDato(titulo: 'Activos', valor: '${cuenta('activo')}', icono: Icons.verified_user_outlined, color: context.paleta.exito),
+              TarjetaDato(titulo: 'Suspendidos', valor: '${cuenta('suspendido')}', icono: Icons.pause_circle_outline, color: context.paleta.alerta),
+              TarjetaDato(titulo: 'Bloqueados', valor: '${cuenta('bloqueado')}', icono: Icons.lock_clock_outlined, color: context.paleta.peligro),
             ]),
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
@@ -68,7 +68,7 @@ class _UsuariosPaginaState extends ConsumerState<UsuariosPagina> {
                 for (final r in rolesVisibles)
                   Chip(
                     avatar: CircleAvatar(
-                        backgroundColor: Colores.primarioClaro,
+                        backgroundColor: context.paleta.primarioClaro,
                         child: Text('${lista.where((u) => u['roles']?['codigo'] == r.codigo).length}', style: const TextStyle(fontSize: 11))),
                     label: Text(r.nombre),
                   ),

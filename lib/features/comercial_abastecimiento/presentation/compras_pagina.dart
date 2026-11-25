@@ -55,9 +55,9 @@ class _ComprasPaginaState extends ConsumerState<ComprasPagina> {
           final filas = l.where((c) => _estado == null || c['estado'] == _estado).toList();
           return Column(children: [
             FilaTarjetas([
-              TarjetaDato(titulo: 'Pendientes de aprobación', valor: '${l.where((c) => c['estado'] == 'pendiente').length}', icono: Icons.hourglass_top, color: Colores.alerta),
-              TarjetaDato(titulo: 'Saldo por pagar (aprobadas)', valor: bs(suma('aprobada')), icono: Icons.payments_outlined, color: Colores.peligro),
-              TarjetaDato(titulo: 'Compras pagadas', valor: '${l.where((c) => c['estado'] == 'pagada').length}', icono: Icons.task_alt, color: Colores.exito),
+              TarjetaDato(titulo: 'Pendientes de aprobación', valor: '${l.where((c) => c['estado'] == 'pendiente').length}', icono: Icons.hourglass_top, color: context.paleta.alerta),
+              TarjetaDato(titulo: 'Saldo por pagar (aprobadas)', valor: bs(suma('aprobada')), icono: Icons.payments_outlined, color: context.paleta.peligro),
+              TarjetaDato(titulo: 'Compras pagadas', valor: '${l.where((c) => c['estado'] == 'pagada').length}', icono: Icons.task_alt, color: context.paleta.exito),
             ]),
             TablaDatos(
               titulo: 'Compras',
@@ -200,7 +200,7 @@ class _ComprasPaginaState extends ConsumerState<ComprasPagina> {
               const SizedBox(width: 8),
               Expanded(child: TextField(controller: pu, decoration: const InputDecoration(labelText: 'Precio unitario (Bs)'))),
               IconButton(
-                icon: const Icon(Icons.add_circle, color: Colores.primario),
+                icon: Icon(Icons.add_circle, color: context.paleta.primario),
                 onPressed: () {
                   if (insumo == null || centro == null || aNumero(cant.text) <= 0 || aNumero(pu.text) <= 0) return;
                   s(() {

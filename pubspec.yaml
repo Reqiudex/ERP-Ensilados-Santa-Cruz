@@ -26,6 +26,7 @@ dependencies:
   printing: ^5.14.3
   riverpod: ^3.5.0
   riverpod_sqflite: ^0.4.8
+  shared_preferences: ^2.5.3
   sqflite: ^2.4.6
   supabase: ^2.16.5
   supabase_flutter: ^2.18.3

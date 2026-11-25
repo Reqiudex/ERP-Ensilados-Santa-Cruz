@@ -66,7 +66,7 @@ class OrdenesPagina extends ConsumerWidget {
                           const Estado('abierta'),
                         ]),
                         const SizedBox(height: 6),
-                        Text('Abierta el ${fechaHora(o['fecha_apertura'])}', style: const TextStyle(color: Colores.textoSuave)),
+                        Text('Abierta el ${fechaHora(o['fecha_apertura'])}', style: TextStyle(color: context.paleta.textoSuave)),
                         const SizedBox(height: 10),
                         Text('${(o['pesajes'] as List?)?.where((p) => p['estado'] == 'confirmado').length ?? 0} pesajes · ${toneladas(_kgAjustado(o) / 1000)} ajustadas'),
                         const SizedBox(height: 12),
@@ -97,8 +97,8 @@ class OrdenesPagina extends ConsumerWidget {
                   final r = rendimientoRollosPorTonelada((o['rollos_obtenidos'] as num).toInt(), _kgAjustado(o) / 1000);
                   final fuera = rendimientoFueraDeRango(r, aNumero(o['granos']?['rollos_ton_min']), aNumero(o['granos']?['rollos_ton_max']));
                   return Row(mainAxisSize: MainAxisSize.min, children: [
-                    Text(dec2(r), style: TextStyle(color: fuera ? Colores.peligro : null, fontWeight: fuera ? FontWeight.w700 : null)),
-                    if (fuera) const Icon(Icons.warning_amber_rounded, size: 16, color: Colores.peligro),
+                    Text(dec2(r), style: TextStyle(color: fuera ? context.paleta.peligro : null, fontWeight: fuera ? FontWeight.w700 : null)),
+                    if (fuera) Icon(Icons.warning_amber_rounded, size: 16, color: context.paleta.peligro),
                   ]);
                 }),
                 Columna('Estado del lote', (o) => etiqueta(_lote(o)?['estado']),
@@ -212,7 +212,7 @@ class OrdenesPagina extends ConsumerWidget {
       await showDialog(
         context: context,
         builder: (c) => AlertDialog(
-          icon: const Icon(Icons.qr_code_2, size: 40, color: Colores.primario),
+          icon: Icon(Icons.qr_code_2, size: 40, color: context.paleta.primario),
           title: Text('Lote ${r['codigo']}'),
           content: Text('Creado «en fermentación» con ${ctrl.text} rollos.\nRendimiento ${dec2(r['rendimiento'])} rollos/t.'
               '${r['alerta'] != null ? '\n\n⚠ ${r['alerta']}' : ''}'),

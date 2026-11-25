@@ -54,7 +54,7 @@ class _AprobacionesPaginaState extends ConsumerState<AprobacionesPagina> {
           return Column(children: [
             if (_estado == 'pendiente')
               FilaTarjetas([
-                TarjetaDato(titulo: 'Pendientes', valor: '${lista.length}', icono: Icons.pending_actions, color: Colores.alerta),
+                TarjetaDato(titulo: 'Pendientes', valor: '${lista.length}', icono: Icons.pending_actions, color: context.paleta.alerta),
                 TarjetaDato(
                     titulo: 'La más antigua',
                     valor: fecha(lista.first['fecha_registro']),
@@ -131,7 +131,7 @@ class _TarjetaSolicitud extends ConsumerWidget {
             ]),
             const SizedBox(height: 6),
             Text('${s['registrado_por']} · ${s['rol']} · ${s['sede']} · ${fechaHora(s['fecha_registro'])}',
-                style: const TextStyle(color: Colores.textoSuave, fontSize: 13)),
+                style: TextStyle(color: context.paleta.textoSuave, fontSize: 13)),
             const SizedBox(height: 10),
             Text('Motivo: ${s['motivo']}'),
             const SizedBox(height: 8),
@@ -139,7 +139,7 @@ class _TarjetaSolicitud extends ConsumerWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  SizedBox(width: 170, child: Text(k, style: const TextStyle(color: Colores.textoSuave))),
+                  SizedBox(width: 170, child: Text(k, style: TextStyle(color: context.paleta.textoSuave))),
                   Expanded(child: Text(v, style: const TextStyle(fontWeight: FontWeight.w500))),
                 ]),
               ),
@@ -147,7 +147,7 @@ class _TarjetaSolicitud extends ConsumerWidget {
               const SizedBox(height: 8),
               Text('Resuelta por ${s['aprobado_por'] ?? '—'} el ${fechaHora(s['fecha_decision'])}'
                   '${(s['datos'] as Map?)?['motivo_decision'] != null ? ' · ${(s['datos'] as Map)['motivo_decision']}' : ''}',
-                  style: const TextStyle(color: Colores.textoSuave)),
+                  style: TextStyle(color: context.paleta.textoSuave)),
             ],
             if (pendiente) ...[
               const SizedBox(height: 12),
@@ -164,7 +164,7 @@ class _TarjetaSolicitud extends ConsumerWidget {
                   label: const Text('Aprobar'),
                 ),
                 OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(foregroundColor: Colores.peligro),
+                  style: OutlinedButton.styleFrom(foregroundColor: context.paleta.peligro),
                   onPressed: () async {
                     final m = await pedirTexto(context, 'Rechazar solicitud', etiqueta: 'Motivo del rechazo');
                     if (m == null || !context.mounted) return;

@@ -119,7 +119,7 @@ class _BitacoraPaginaState extends ConsumerState<BitacoraPagina> {
                     celda: (e) => Text(_acciones[e['accion']] ?? '${e['accion']}',
                         style: TextStyle(
                             fontWeight: FontWeight.w600,
-                            color: ['acceso_denegado', 'login_fallido', 'bloqueo'].contains(e['accion']) ? Colores.peligro : null))),
+                            color: ['acceso_denegado', 'login_fallido', 'bloqueo'].contains(e['accion']) ? context.paleta.peligro : null))),
                 Columna('Tabla o módulo', (e) => _tablas[e['tabla']] ?? '${e['tabla']}'),
                 Columna('IP', (e) => '${e['ip'] ?? '—'}'),
                 Columna('Cambio', _cambio, ancho: 380),

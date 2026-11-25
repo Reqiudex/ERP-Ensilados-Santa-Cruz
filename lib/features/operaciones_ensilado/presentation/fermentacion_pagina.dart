@@ -68,15 +68,15 @@ class _FermentacionPaginaState extends ConsumerState<FermentacionPagina> {
                           Estado(x['estado']),
                         ]),
                         Text('${x['productos']?['granos']?['nombre']} · ${x['rollos_producidos']} rollos · ${x['sedes']?['nombre'] ?? ''}',
-                            style: const TextStyle(color: Colores.textoSuave)),
+                            style: TextStyle(color: context.paleta.textoSuave)),
                         const SizedBox(height: 12),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(6),
                           child: LinearProgressIndicator(
                             minHeight: 10,
                             value: (transcurridos / dias).clamp(0, 1).toDouble(),
-                            color: loteApto(sellado, dias, hoy) ? Colores.exito : Colores.ambar,
-                            backgroundColor: Colores.borde,
+                            color: loteApto(sellado, dias, hoy) ? context.paleta.exito : context.paleta.ambar,
+                            backgroundColor: context.paleta.borde,
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -88,7 +88,7 @@ class _FermentacionPaginaState extends ConsumerState<FermentacionPagina> {
                             Expanded(
                               child: OutlinedButton.icon(
                                 onPressed: () => _revisar(context, x, 'integro'),
-                                icon: const Icon(Icons.check_circle_outline, color: Colores.exito),
+                                icon: Icon(Icons.check_circle_outline, color: context.paleta.exito),
                                 label: const Text('Film íntegro'),
                               ),
                             ),
@@ -96,7 +96,7 @@ class _FermentacionPaginaState extends ConsumerState<FermentacionPagina> {
                             Expanded(
                               child: OutlinedButton.icon(
                                 onPressed: () => _revisar(context, x, 'danado'),
-                                icon: const Icon(Icons.report_outlined, color: Colores.peligro),
+                                icon: Icon(Icons.report_outlined, color: context.paleta.peligro),
                                 label: const Text('Film dañado'),
                               ),
                             ),

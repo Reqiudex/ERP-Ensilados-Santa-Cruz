@@ -208,7 +208,7 @@ class _StockLotesPaginaState extends ConsumerState<StockLotesPagina> {
               final revs = ((d['revisiones'] as List?) ?? const []).cast<Fila>();
               Widget paso(IconData i, String t, String sub) => ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: CircleAvatar(backgroundColor: Colores.primarioClaro, child: Icon(i, color: Colores.primario, size: 20)),
+                    leading: CircleAvatar(backgroundColor: context.paleta.primarioClaro, child: Icon(i, color: context.paleta.primario, size: 20)),
                     title: Text(t),
                     subtitle: Text(sub),
                   );

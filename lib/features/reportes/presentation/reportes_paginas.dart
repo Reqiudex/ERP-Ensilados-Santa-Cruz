@@ -76,10 +76,10 @@ class _BarraPeriodo extends StatelessWidget {
 
 /// Barras horizontales simples para los reportes.
 class Barras extends StatelessWidget {
-  const Barras(this.datos, {super.key, this.formato, this.color = Colores.primario, this.marcas = const {}});
+  const Barras(this.datos, {super.key, this.formato, this.color, this.marcas = const {}});
   final Map<String, double> datos;
   final String Function(double)? formato;
-  final Color color;
+  final Color? color;
   final Map<String, Color> marcas;
   @override
   Widget build(BuildContext context) {
@@ -102,7 +102,7 @@ class Barras extends StatelessWidget {
                   child: Container(
                     height: 18,
                     width: max == 0 ? 0 : k.maxWidth * (e.value / max),
-                    decoration: BoxDecoration(color: marcas[e.key] ?? color, borderRadius: BorderRadius.circular(4)),
+                    decoration: BoxDecoration(color: marcas[e.key] ?? color ?? context.paleta.primario, borderRadius: BorderRadius.circular(4)),
                   ),
                 ),
               ),
@@ -153,9 +153,9 @@ class _ReporteRendimientoPaginaState extends ConsumerState<ReporteRendimientoPag
             FilaTarjetas([
               TarjetaDato(titulo: 'Lotes sellados', valor: '${l.length}', icono: Icons.qr_code_2),
               TarjetaDato(titulo: 'Rollos producidos', valor: entero(rollos), icono: Icons.inventory_2_outlined),
-              TarjetaDato(titulo: 'Grano ajustado', valor: toneladas(t), icono: Icons.scale_outlined, color: Colores.ambarOscuro),
-              TarjetaDato(titulo: 'Rendimiento global', valor: '${dec2(rendimientoRollosPorTonelada(rollos, t))} r/t', icono: Icons.trending_up, color: Colores.info),
-              TarjetaDato(titulo: 'Alertas', valor: '$alertas', icono: Icons.warning_amber_rounded, color: alertas > 0 ? Colores.peligro : Colores.exito),
+              TarjetaDato(titulo: 'Grano ajustado', valor: toneladas(t), icono: Icons.scale_outlined, color: context.paleta.ambarOscuro),
+              TarjetaDato(titulo: 'Rendimiento global', valor: '${dec2(rendimientoRollosPorTonelada(rollos, t))} r/t', icono: Icons.trending_up, color: context.paleta.info),
+              TarjetaDato(titulo: 'Alertas', valor: '$alertas', icono: Icons.warning_amber_rounded, color: alertas > 0 ? context.paleta.peligro : context.paleta.exito),
             ]),
             Seccion(
               titulo: 'Rendimiento por centro (rollos por tonelada)',
@@ -177,7 +177,7 @@ class _ReporteRendimientoPaginaState extends ConsumerState<ReporteRendimientoPag
                 Columna('Rango normal', (x) => '${dec2(x['rollos_ton_min'])} a ${dec2(x['rollos_ton_max'])}'),
                 Columna('Dictamen', (x) => '${x['dictamen_rendimiento']}',
                     celda: (x) => Text('${x['dictamen_rendimiento']}',
-                        style: TextStyle(fontWeight: FontWeight.w600, color: '${x['dictamen_rendimiento']}'.startsWith('Alerta') ? Colores.peligro : Colores.exito))),
+                        style: TextStyle(fontWeight: FontWeight.w600, color: '${x['dictamen_rendimiento']}'.startsWith('Alerta') ? context.paleta.peligro : context.paleta.exito))),
               ],
             ),
           ]);
@@ -319,8 +319,8 @@ class _ReporteVentasPaginaState extends ConsumerState<ReporteVentasPagina> {
             FilaTarjetas([
               TarjetaDato(titulo: 'Notas de venta', valor: '${notas.length}', icono: Icons.receipt_long_outlined),
               TarjetaDato(titulo: 'Total vendido', valor: bs(total), icono: Icons.point_of_sale_outlined),
-              TarjetaDato(titulo: 'Cobrado', valor: bs(cobrado), icono: Icons.savings_outlined, color: Colores.exito),
-              TarjetaDato(titulo: 'Por cobrar', valor: bs(total - cobrado), icono: Icons.account_balance_wallet_outlined, color: Colores.ambarOscuro),
+              TarjetaDato(titulo: 'Cobrado', valor: bs(cobrado), icono: Icons.savings_outlined, color: context.paleta.exito),
+              TarjetaDato(titulo: 'Por cobrar', valor: bs(total - cobrado), icono: Icons.account_balance_wallet_outlined, color: context.paleta.ambarOscuro),
             ]),
             Seccion(
               titulo: 'Importe por producto',
@@ -412,8 +412,8 @@ class _ReporteMermasPaginaState extends ConsumerState<ReporteMermasPagina> {
           }
           return Column(children: [
             FilaTarjetas([
-              TarjetaDato(titulo: 'Rollos dados de baja', valor: '$total', icono: Icons.remove_circle_outline, color: Colores.peligro),
-              TarjetaDato(titulo: 'Merma sobre lo producido', valor: '${dec1(porcentajeMerma(total, producidos))} %', icono: Icons.percent, color: Colores.ambarOscuro),
+              TarjetaDato(titulo: 'Rollos dados de baja', valor: '$total', icono: Icons.remove_circle_outline, color: context.paleta.peligro),
+              TarjetaDato(titulo: 'Merma sobre lo producido', valor: '${dec1(porcentajeMerma(total, producidos))} %', icono: Icons.percent, color: context.paleta.ambarOscuro),
               TarjetaDato(titulo: 'Bajas aprobadas', valor: '${bajas.length}', icono: Icons.fact_check_outlined),
             ]),
             Wrap(spacing: 20, runSpacing: 0, children: [
@@ -421,11 +421,11 @@ class _ReporteMermasPaginaState extends ConsumerState<ReporteMermasPagina> {
                 width: esAncho(context) ? 460 : double.infinity,
                 child: Seccion(titulo: 'Merma por sede (%)', icono: Icons.bar_chart, hijo: Barras({
                   for (final s in sedes) '${s['sede']}'.replaceAll('Centro de Acopio ', ''): aNumero(s['porcentaje']),
-                }, formato: (v) => '${dec1(v)} %', color: Colores.peligro)),
+                }, formato: (v) => '${dec1(v)} %', color: context.paleta.peligro)),
               ),
               SizedBox(
                 width: esAncho(context) ? 460 : double.infinity,
-                child: Seccion(titulo: 'Rollos por causa', icono: Icons.pie_chart_outline, hijo: Barras(porCausa, formato: (v) => entero(v), color: Colores.ambarOscuro)),
+                child: Seccion(titulo: 'Rollos por causa', icono: Icons.pie_chart_outline, hijo: Barras(porCausa, formato: (v) => entero(v), color: context.paleta.ambarOscuro)),
               ),
             ]),
             TablaDatos(

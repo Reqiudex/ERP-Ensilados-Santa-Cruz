@@ -147,16 +147,16 @@ class _BasculaPaginaState extends ConsumerState<BasculaPagina> {
               titulo: 'Pendientes de sincronizar',
               valor: '${pendientes.length}',
               icono: Icons.cloud_upload_outlined,
-              color: pendientes.isEmpty ? Colores.exito : Colores.alerta,
+              color: pendientes.isEmpty ? context.paleta.exito : context.paleta.alerta,
               detalle: ref.watch(enLineaProvider) ? 'Con señal' : 'Sin señal: se guardan en el teléfono',
             ),
             TarjetaDato(titulo: 'Rechazados por el servidor', valor: '${rechazados.length}', icono: Icons.report_problem_outlined,
-                color: rechazados.isEmpty ? Colores.exito : Colores.peligro),
+                color: rechazados.isEmpty ? context.paleta.exito : context.paleta.peligro),
           ]),
           for (final r in rechazados)
             Card(
               child: ListTile(
-                leading: const Icon(Icons.report_problem_outlined, color: Colores.peligro),
+                leading: Icon(Icons.report_problem_outlined, color: context.paleta.peligro),
                 title: Text(r.descripcion),
                 subtitle: Text('${r.motivo ?? 'Rechazado por el servidor'}. Corrija el dato y reintente, o descártelo y '
                     'vuelva a registrarlo.'),
@@ -251,7 +251,7 @@ class _BasculaPaginaState extends ConsumerState<BasculaPagina> {
                       final neto = pesoNeto(_n(_bruto)!, _n(_tara)!);
                       final aj = pesoAjustadoPorHumedad(neto, _n(_humedad) ?? 0, estandar);
                       return Card(
-                        color: Colores.primarioClaro.withValues(alpha: .35),
+                        color: context.paleta.primarioClaro.withValues(alpha: .35),
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -260,7 +260,7 @@ class _BasculaPaginaState extends ConsumerState<BasculaPagina> {
                             Text('Neto ${kg(neto)}  →  ajustado por humedad ${kg(aj)}',
                                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                             Text('Fórmula: neto × (100 − ${dec1(_n(_humedad))}) ÷ (100 − ${dec1(estandar)})',
-                                style: const TextStyle(color: Colores.textoSuave, fontSize: 12)),
+                                style: TextStyle(color: context.paleta.textoSuave, fontSize: 12)),
                           ]),
                         ),
                       );
@@ -319,7 +319,7 @@ class _BasculaPaginaState extends ConsumerState<BasculaPagina> {
                 for (final r in pendientes)
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.schedule, color: Colores.alerta),
+                    leading: Icon(Icons.schedule, color: context.paleta.alerta),
                     title: Text(r.descripcion),
                     subtitle: Text('Hora del dispositivo: ${fechaHora(r.creado.toIso8601String())} · id ${r.id.substring(0, 8)}'),
                   ),
@@ -419,16 +419,16 @@ class _Pasos extends StatelessWidget {
       for (var i = 0; i < 3; i++) ...[
         CircleAvatar(
           radius: 16,
-          backgroundColor: i <= paso ? Colores.primario : Colores.borde,
+          backgroundColor: i <= paso ? context.paleta.primario : context.paleta.borde,
           child: i < paso
-              ? const Icon(Icons.check, size: 16, color: Colors.white)
-              : Text('${i + 1}', style: TextStyle(color: i <= paso ? Colors.white : Colores.textoSuave)),
+              ? Icon(Icons.check, size: 16, color: context.paleta.sobrePrimario)
+              : Text('${i + 1}', style: TextStyle(color: i <= paso ? context.paleta.sobrePrimario : context.paleta.textoSuave)),
         ),
         const SizedBox(width: 6),
         if (esAncho(context) || i == paso) Flexible(
           child: Text(nombres[i],
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontWeight: i == paso ? FontWeight.w700 : FontWeight.w400, color: i <= paso ? Colores.texto : Colores.textoSuave)),
+              style: TextStyle(fontWeight: i == paso ? FontWeight.w700 : FontWeight.w400, color: i <= paso ? context.paleta.texto : context.paleta.textoSuave)),
         ),
         if (i < 2) const Expanded(child: Divider(indent: 8, endIndent: 8)),
       ],

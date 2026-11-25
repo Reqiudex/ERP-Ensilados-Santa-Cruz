@@ -96,7 +96,7 @@ class _InsumosPaginaState extends ConsumerState<InsumosPagina> {
                       titulo: '${s['producto']}'.split(' ').take(2).join(' '),
                       valor: entero(s['disponible']),
                       icono: Icons.inventory_outlined,
-                      color: aNumero(s['disponible']) < 10 ? Colores.peligro : Colores.primario,
+                      color: aNumero(s['disponible']) < 10 ? context.paleta.peligro : context.paleta.primario,
                       detalle: 'unidades disponibles',
                     ),
                 ])),

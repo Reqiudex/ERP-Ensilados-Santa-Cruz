@@ -80,18 +80,18 @@ class MultisedePagina extends ConsumerWidget {
           double suma(Iterable<Fila> l, String c) => l.fold(0, (a, f) => a + aNumero(f[c]));
           return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(children: [
-              const Icon(Icons.wifi_tethering, color: Colores.exito, size: 18),
+              Icon(Icons.wifi_tethering, color: context.paleta.exito, size: 18),
               const SizedBox(width: 6),
               Text('En vivo · última actualización ${fechaHora(foto.hora.toIso8601String())}'
                   '${foto.eventos > 0 ? ' · ${foto.eventos} cambios recibidos' : ''}',
-                  style: const TextStyle(color: Colores.textoSuave)),
+                  style: TextStyle(color: context.paleta.textoSuave)),
             ]),
             const SizedBox(height: 16),
             FilaTarjetas([
               TarjetaDato(titulo: 'Disponible', valor: entero(suma(rollos, 'disponible')), icono: Icons.inventory_2_outlined, detalle: 'rollos'),
-              TarjetaDato(titulo: 'Reservado', valor: entero(suma(rollos, 'reservado')), icono: Icons.bookmark_added_outlined, color: Colores.info, detalle: 'rollos para pedidos'),
-              TarjetaDato(titulo: 'En tránsito', valor: entero(suma(rollos, 'en_transito')), icono: Icons.local_shipping_outlined, color: Colores.ambarOscuro, detalle: 'rollos en guías'),
-              TarjetaDato(titulo: 'Toneladas disponibles', valor: dec2(suma(rollos, 'toneladas')), icono: Icons.scale_outlined, color: Colores.exito),
+              TarjetaDato(titulo: 'Reservado', valor: entero(suma(rollos, 'reservado')), icono: Icons.bookmark_added_outlined, color: context.paleta.info, detalle: 'rollos para pedidos'),
+              TarjetaDato(titulo: 'En tránsito', valor: entero(suma(rollos, 'en_transito')), icono: Icons.local_shipping_outlined, color: context.paleta.ambarOscuro, detalle: 'rollos en guías'),
+              TarjetaDato(titulo: 'Toneladas disponibles', valor: dec2(suma(rollos, 'toneladas')), icono: Icons.scale_outlined, color: context.paleta.exito),
             ]),
             Wrap(spacing: 12, runSpacing: 12, children: [
               for (final s in sedes)
@@ -114,10 +114,10 @@ class MultisedePagina extends ConsumerWidget {
                                 Text(prod, style: const TextStyle(fontWeight: FontWeight.w600)),
                                 const SizedBox(height: 4),
                                 Wrap(spacing: 6, runSpacing: 4, children: [
-                                  _Mini('Aptos', aptos, Colores.exito),
-                                  _Mini('Fermentando', ferm, Colores.alerta),
-                                  _Mini('Reservados', suma(l, 'reservado'), Colores.info),
-                                  _Mini('En tránsito', suma(l, 'en_transito'), Colores.ambarOscuro),
+                                  _Mini('Aptos', aptos, context.paleta.exito),
+                                  _Mini('Fermentando', ferm, context.paleta.alerta),
+                                  _Mini('Reservados', suma(l, 'reservado'), context.paleta.info),
+                                  _Mini('En tránsito', suma(l, 'en_transito'), context.paleta.ambarOscuro),
                                 ]),
                               ]),
                             );
