@@ -1,9 +1,4 @@
-build/
-.dart_tool/
-android/
-.git/
-.github/
-scripts/
-supabase/
-test/
-*.md
+*
+!Dockerfile
+!publicado/
+!publicado/**
